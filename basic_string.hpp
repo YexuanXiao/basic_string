@@ -6,6 +6,8 @@
 #include <cassert>
 #include <compare>
 #include <stdexcept>
+#include <cstring>
+#include <iterator>
 
 namespace bizwen
 {
@@ -76,19 +78,19 @@ namespace bizwen
 
         constexpr bool is_long_() const noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             return size_flag_ == -1;
         }
 
         constexpr bool is_short_() const noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             return size_flag_ > 0;
         }
 
         constexpr bool is_empty_() const noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             return !size_flag_;
         }
 
@@ -99,7 +101,7 @@ namespace bizwen
 
         constexpr std::size_t size_() const noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             if (is_long_())
             {
                 auto&& ls = stor_.ls_;
@@ -144,7 +146,7 @@ namespace bizwen
          */
         constexpr void transform_null_to_empty() noexcept
         {
-            assert(("only null string can call " __FUNCTION__, !is_null_()));
+            assert(("only null string can call ", !is_null_()));
             size_flag_ = 0;
         }
 
@@ -191,7 +193,7 @@ namespace bizwen
 
         /**
          * @brief never shrink
-        */
+         */
         constexpr void shrink_to_fit() const noexcept
         {
             return;
@@ -206,7 +208,7 @@ namespace bizwen
          */
         constexpr CharT const* begin_() const noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             if (is_long_())
             {
                 return stor_.ls_.begin_;
@@ -285,7 +287,7 @@ namespace bizwen
 
         constexpr const CharT& front() const noexcept
         {
-            assert(("string is empty, cannot call " __FUNCTION__, !is_empty_()));
+            assert(("string is empty, cannot call ", !is_empty_()));
             return *begin_();
         }
 
@@ -296,7 +298,7 @@ namespace bizwen
 
         constexpr const CharT& back() const noexcept
         {
-            assert(("string is empty, cannot call " __FUNCTION__, !is_empty_()));
+            assert(("string is empty, cannot call ", !is_empty_()));
             return *(end_() - 1);
         }
 
@@ -313,7 +315,7 @@ namespace bizwen
         // ********************************* begin swap ******************************
         constexpr void swap(basic_string& other) noexcept(nothrow_move_allocator_)
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             auto&& self = *this;
             std::ranges::swap(self.allocator_, other.allocator_);
             std::ranges::swap(self.stor_, other.stor_);
@@ -327,8 +329,15 @@ namespace bizwen
 
         // ********************************* begin iterator type ******************************
     private:
-        struct basic_iterator_type_
+        struct iterator_type_
         {
+            using difference_type = std::ptrdiff_t;
+            using value_type = CharT;
+            using pointer = std::add_pointer_t<value_type>;
+            using reference = std::add_lvalue_reference_t<CharT>;
+            using iterator_category = std::random_access_iterator_tag;
+            using iterator_concept = std::contiguous_iterator_tag;
+
             CharT* current_{};
 #ifndef NDEBUG
             basic_string* target_{};
@@ -344,13 +353,22 @@ namespace bizwen
             }
             friend class basic_string;
 
-            basic_iterator_type_() noexcept = default;
-            basic_iterator_type_(basic_iterator_type_ const&) noexcept = default;
-            basic_iterator_type_(basic_iterator_type_&&) noexcept = default;
-            basic_iterator_type_& operator=(basic_iterator_type_ const&) & noexcept = default;
-            basic_iterator_type_& operator=(basic_iterator_type_&&) & noexcept = default;
+            iterator_type_() noexcept = default;
+            iterator_type_(iterator_type_ const&) noexcept = default;
+            iterator_type_(iterator_type_&&) noexcept = default;
+            iterator_type_& operator=(iterator_type_ const&) & noexcept = default;
+            iterator_type_& operator=(iterator_type_&&) & noexcept = default;
+#ifndef NDEBUG
 
-            constexpr basic_iterator_type_ operator+(difference_type n) const& noexcept
+            constexpr iterator_type_(CharT* current, basic_string* target) : current_(current), target_(target)
+            {
+            }
+#else
+            constexpr iterator_type_(CharT* current) : current_(current)
+            {
+            }
+#endif // NDEBUG
+            constexpr iterator_type_ operator+(difference_type n) const& noexcept
             {
                 auto temp = *this;
                 temp.current_ += n;
@@ -358,7 +376,7 @@ namespace bizwen
                 return temp;
             }
 
-            constexpr basic_iterator_type_ operator-(difference_type n) const& noexcept
+            constexpr iterator_type_ operator-(difference_type n) const& noexcept
             {
                 auto temp = *this;
                 temp.current_ -= n;
@@ -366,7 +384,7 @@ namespace bizwen
                 return temp;
             }
 
-            constexpr friend basic_iterator_type_ operator+(difference_type n, basic_iterator_type_ const& rhs) noexcept
+            constexpr friend iterator_type_ operator+(difference_type n, iterator_type_ const& rhs) noexcept
             {
                 auto temp = rhs;
                 temp.current_ += n;
@@ -374,7 +392,7 @@ namespace bizwen
                 return temp;
             }
 
-            constexpr friend basic_iterator_type_ operator-(difference_type n, basic_iterator_type_ const& rhs) noexcept
+            constexpr friend iterator_type_ operator-(difference_type n, iterator_type_ const& rhs) noexcept
             {
                 auto temp = rhs;
                 temp.current_ -= n;
@@ -382,102 +400,81 @@ namespace bizwen
                 return temp;
             }
 
-            constexpr basic_iterator_type_& operator+=(difference_type n) & noexcept
+            constexpr friend difference_type operator-(iterator_type_ const& lhs, iterator_type_ const& rhs) noexcept
+            {
+                assert(("iter belongs to different strings", lhs.target_ == rhs.target_));
+                return lhs.current_ - rhs.current_;
+            }
+
+            constexpr iterator_type_& operator+=(difference_type n) & noexcept
             {
                 current_ += n;
                 check();
                 return *this;
             }
 
-            constexpr basic_iterator_type_& operator-=(difference_type n) & noexcept
+            constexpr iterator_type_& operator-=(difference_type n) & noexcept
             {
                 current_ -= n;
                 check();
                 return *this;
             }
 
-            constexpr basic_iterator_type_& operator++() & noexcept
+            constexpr iterator_type_& operator++() & noexcept
             {
                 ++current_;
                 check();
                 return *this;
             }
 
-            constexpr basic_iterator_type_& operator--() & noexcept
+            constexpr iterator_type_& operator--() & noexcept
             {
                 --current_;
                 check();
                 return *this;
             }
 
-            constexpr basic_iterator_type_ operator++(int) const& noexcept
+            constexpr iterator_type_ operator++(int) const& noexcept
             {
                 ++current_;
                 check();
                 return *this;
             }
 
-            constexpr basic_iterator_type_ operator--(int) const& noexcept
+            constexpr iterator_type_ operator--(int) const& noexcept
             {
                 --current_;
                 check();
                 return *this;
             }
 
-            friend constexpr std::strong_ordering operator<=>(basic_iterator_type_ const&, basic_iterator_type_ const&) noexcept = default;
-        };
-
-        struct const_iterator_type_: public basic_iterator_type_
-        {
-            friend class basic_string;
-#ifdef NDEBUG
-            constexpr const_iterator_type_(CharT const* current)
+            constexpr CharT& operator[](difference_type n) const noexcept
             {
-                this->current_ = current;
-            }
-#else
-            constexpr const_iterator_type_(CharT const* current, basic_string const* target)
-            {
-                this->current_ = current;
-                this->target_ = target;
-            }
+#ifndef NDEBUG
+                iterator_type_ end = (*this) + n;
+                end.check();
 #endif
-            constexpr CharT const& operator*() const& noexcept
-            {
-                return *this->current_;
-            }
-        };
-
-        struct iterator_type_: public basic_iterator_type_
-        {
-            friend class basic_string;
-#ifdef NDEBUG
-            constexpr iterator_type_(CharT const* current)
-            {
-                this->current_ = current;
-            }
-#else
-            constexpr iterator_type_(CharT const* current, basic_string const* target)
-            {
-                this->current_ = current;
-                this->target_ = target;
-            }
-#endif
-            constexpr CharT& operator*() & noexcept
-            {
-                return *this->current_;
+                return *(current_ + n);
             }
 
-            constexpr CharT const& operator*() const& noexcept
+            constexpr CharT& operator*() const noexcept
             {
-                return *this->current_;
+                return *current_;
             }
+
+            constexpr CharT* operator->() const noexcept
+            {
+                return current_;
+            }
+
+
+            friend constexpr std::strong_ordering operator<=>(iterator_type_ const&, iterator_type_ const&) noexcept = default;
         };
 
         // ********************************* begin iterator function ******************************
     public:
         using iterator = iterator_type_;
-        using const_iterator = const_iterator_type_;
+        using const_iterator = std::basic_const_iterator<iterator_type_>;
         using reverse_iterator = std::reverse_iterator<iterator>;
         using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -492,29 +489,39 @@ namespace bizwen
 
         constexpr iterator end() noexcept
         {
-#ifdef _DEBUG
-            return { end_(), this };
+#ifndef NDEBUG
+            return iterator_type_{ end_(), this };
 #else
-            return { end_() };
+            return iterator_type_{ end_() };
+#endif // _DEBUG
+        }
+
+        constexpr const_iterator begin() const noexcept
+        {
+#ifndef NDEBUG
+            return iterator_type_{ const_cast<CharT*>(begin_()), const_cast<basic_string*>(this) };
+#else
+            return iterator_type_{ begin_() };
+#endif // _DEBUG
+        }
+
+        constexpr const_iterator end() const noexcept
+        {
+#ifndef NDEBUG
+            return iterator_type_{ const_cast<CharT*>(end_()), const_cast<basic_string*>(this) };
+#else
+            return iterator_type_{ const_cast<CharT*>(end_()) };
 #endif // _DEBUG
         }
 
         constexpr const_iterator cbegin() noexcept
         {
-#ifdef _DEBUG
-            return { begin_(), this };
-#else
-            return { begin_() };
-#endif // _DEBUG
+            return begin();
         }
 
         constexpr const_iterator cend() noexcept
         {
-#ifdef _DEBUG
-            return { end_(), this };
-#else
-            return { end_() };
-#endif // _DEBUG
+            return end();
         }
 
         // ********************************* begin memory management ******************************
@@ -528,7 +535,7 @@ namespace bizwen
          */
         constexpr void allocate_plus_one_(size_type n)
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             // strong exception safe grantee
             if (n <= short_string_max_ && !is_long_())
             {
@@ -557,7 +564,7 @@ namespace bizwen
          */
         constexpr void dealloc_(ls_type_& ls) noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             allocator_.deallocate(ls.begin_, ls.last_ - ls.begin_);
         }
 
@@ -593,7 +600,7 @@ namespace bizwen
          */
         constexpr void fill_(CharT const* begin, CharT const* end) noexcept
         {
-            assert(("string is null, cannot call " __FUNCTION__, !is_null_()));
+            assert(("string is null, cannot call ", !is_null_()));
             assert(("cannot storage string in current allocated storage", static_cast<size_type>(end - begin) <= capacity()));
             std::copy(begin, end, begin_());
         }
