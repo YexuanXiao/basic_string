@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <iterator>
+#include <version>
 
 namespace bizwen
 {
@@ -78,19 +79,19 @@ namespace bizwen
 
         constexpr bool is_long_() const noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             return size_flag_ == -1;
         }
 
         constexpr bool is_short_() const noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             return size_flag_ > 0;
         }
 
         constexpr bool is_empty_() const noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             return !size_flag_;
         }
 
@@ -101,7 +102,7 @@ namespace bizwen
 
         constexpr std::size_t size_() const noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             if (is_long_())
             {
                 auto&& ls = stor_.ls_;
@@ -146,7 +147,7 @@ namespace bizwen
          */
         constexpr void transform_null_to_empty() noexcept
         {
-            assert(("only null string can call ", !is_null_()));
+            assert(("only null string can call transform null to empty", !is_null_()));
             size_flag_ = 0;
         }
 
@@ -208,7 +209,7 @@ namespace bizwen
          */
         constexpr CharT const* begin_() const noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             if (is_long_())
             {
                 return stor_.ls_.begin_;
@@ -287,7 +288,7 @@ namespace bizwen
 
         constexpr const CharT& front() const noexcept
         {
-            assert(("string is empty, cannot call ", !is_empty_()));
+            assert(("string is empty", !is_empty_()));
             return *begin_();
         }
 
@@ -298,7 +299,7 @@ namespace bizwen
 
         constexpr const CharT& back() const noexcept
         {
-            assert(("string is empty, cannot call ", !is_empty_()));
+            assert(("string is empty", !is_empty_()));
             return *(end_() - 1);
         }
 
@@ -315,7 +316,7 @@ namespace bizwen
         // ********************************* begin swap ******************************
         constexpr void swap(basic_string& other) noexcept(nothrow_move_allocator_)
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             auto&& self = *this;
             std::ranges::swap(self.allocator_, other.allocator_);
             std::ranges::swap(self.stor_, other.stor_);
@@ -467,7 +468,6 @@ namespace bizwen
                 return current_;
             }
 
-
             friend constexpr std::strong_ordering operator<=>(iterator_type_ const&, iterator_type_ const&) noexcept = default;
         };
 
@@ -501,7 +501,7 @@ namespace bizwen
 #ifndef NDEBUG
             return iterator_type_{ const_cast<CharT*>(begin_()), const_cast<basic_string*>(this) };
 #else
-            return iterator_type_{ begin_() };
+            return iterator_type_{ const_cast<CharT*>(begin_()) };
 #endif // _DEBUG
         }
 
@@ -535,7 +535,7 @@ namespace bizwen
          */
         constexpr void allocate_plus_one_(size_type n)
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             // strong exception safe grantee
             if (n <= short_string_max_ && !is_long_())
             {
@@ -564,7 +564,7 @@ namespace bizwen
          */
         constexpr void dealloc_(ls_type_& ls) noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             allocator_.deallocate(ls.begin_, ls.last_ - ls.begin_);
         }
 
@@ -600,7 +600,7 @@ namespace bizwen
          */
         constexpr void fill_(CharT const* begin, CharT const* end) noexcept
         {
-            assert(("string is null, cannot call ", !is_null_()));
+            assert(("string is null", !is_null_()));
             assert(("cannot storage string in current allocated storage", static_cast<size_type>(end - begin) <= capacity()));
             std::copy(begin, end, begin_());
         }
@@ -612,7 +612,11 @@ namespace bizwen
          */
         constexpr static size_type c_style_string_length_(CharT const* begin) noexcept
         {
+#if defined(__cpp_if_consteval) && (__cpp_if_consteval >= 202106L)
+            if !consteval
+#else
             if constexpr (!std::is_constant_evaluated())
+#endif
             {
                 if constexpr (std::is_same_v<char, CharT>)
                 {
@@ -623,13 +627,10 @@ namespace bizwen
                     return std::wcslen(begin);
                 }
             }
-            else
-            {
-                auto end = begin;
-                for (; *end != CharT{}; ++end)
-                    ;
-                return end - begin;
-            }
+            auto end = begin;
+            for (; *end != CharT{}; ++end)
+                ;
+            return end - begin;
         }
 
         /**
@@ -894,7 +895,10 @@ namespace bizwen
         {
         }
 
-        /*
+// tagged constructors to construct from container compatible range
+#ifdef __cpp_lib_containers_ranges
+#if __cpp_lib_containers_ranges >= 202202L
+
         template <class R>
             requires std::ranges::range<R> && requires {
                 typename R::value_type;
@@ -925,7 +929,9 @@ namespace bizwen
                     push_back(*first);
             }
         }
-        */
+#endif
+#endif // __cpp_lib_containers_ranges
+
         // ********************************* begin append ******************************
         /**
          * @brief this version provide for InputIt version of assign, other version of append and operator+=
