@@ -57,11 +57,13 @@ namespace bizwen
         [[msvc::no_unique_address]] Allocator allocator_{};
 #else
         [[no_unique_address]] Allocator allocator_{};
-#endif // _MSC_VER
+#endif
+
         /**
          * @brief storage of string
          */
         storage_type_ stor_{};
+
         /**
          * @brief flag > 0: short string, length of string is size_flag
          * @brief flag = 0: empty string
@@ -152,6 +154,7 @@ namespace bizwen
         }
 
         // ********************************* begin volume ******************************
+
         constexpr bool empty() const noexcept
         {
             return is_empty_();
@@ -314,6 +317,7 @@ namespace bizwen
         }
 
         // ********************************* begin swap ******************************
+
         constexpr void swap(basic_string& other) noexcept(nothrow_move_allocator_)
         {
             assert(("string is null", !is_null_()));
@@ -329,6 +333,7 @@ namespace bizwen
         }
 
         // ********************************* begin iterator type ******************************
+
     private:
         struct iterator_type_
         {
@@ -340,9 +345,11 @@ namespace bizwen
             using iterator_concept = std::contiguous_iterator_tag;
 
             CharT* current_{};
+
 #ifndef NDEBUG
             basic_string* target_{};
-#endif // _DEBUG
+#endif
+
             constexpr void check() const noexcept
             {
 #ifndef NDEBUG
@@ -350,8 +357,9 @@ namespace bizwen
                     ;
                 else
                     assert(("iterator is invalidated", false));
-#endif // _DEBUG
+#endif
             }
+
             friend class basic_string;
 
             iterator_type_() noexcept = default;
@@ -359,8 +367,8 @@ namespace bizwen
             iterator_type_(iterator_type_&&) noexcept = default;
             iterator_type_& operator=(iterator_type_ const&) & noexcept = default;
             iterator_type_& operator=(iterator_type_&&) & noexcept = default;
-#ifndef NDEBUG
 
+#ifndef NDEBUG
             constexpr iterator_type_(CharT* current, basic_string* target) : current_(current), target_(target)
             {
             }
@@ -368,7 +376,8 @@ namespace bizwen
             constexpr iterator_type_(CharT* current) : current_(current)
             {
             }
-#endif // NDEBUG
+#endif
+
             constexpr iterator_type_ operator+(difference_type n) const& noexcept
             {
                 auto temp = *this;
@@ -472,6 +481,7 @@ namespace bizwen
         };
 
         // ********************************* begin iterator function ******************************
+
     public:
         using iterator = iterator_type_;
         using const_iterator = std::basic_const_iterator<iterator_type_>;
@@ -484,7 +494,7 @@ namespace bizwen
             return { begin_(), this };
 #else
             return { begin_() };
-#endif // _DEBUG
+#endif
         }
 
         constexpr iterator end() noexcept
@@ -493,7 +503,7 @@ namespace bizwen
             return iterator_type_{ end_(), this };
 #else
             return iterator_type_{ end_() };
-#endif // _DEBUG
+#endif
         }
 
         constexpr const_iterator begin() const noexcept
@@ -502,7 +512,7 @@ namespace bizwen
             return iterator_type_{ const_cast<CharT*>(begin_()), const_cast<basic_string*>(this) };
 #else
             return iterator_type_{ const_cast<CharT*>(begin_()) };
-#endif // _DEBUG
+#endif
         }
 
         constexpr const_iterator end() const noexcept
@@ -511,7 +521,7 @@ namespace bizwen
             return iterator_type_{ const_cast<CharT*>(end_()), const_cast<basic_string*>(this) };
 #else
             return iterator_type_{ const_cast<CharT*>(end_()) };
-#endif // _DEBUG
+#endif
         }
 
         constexpr const_iterator cbegin() noexcept
@@ -525,6 +535,7 @@ namespace bizwen
         }
 
         // ********************************* begin memory management ******************************
+
     private:
         /**
          * @brief allocates memory and automatically adds 1 to store trailing zero
@@ -544,16 +555,14 @@ namespace bizwen
             }
 
             ++n;
-            if constexpr (requires { allocator_.allocate_at_least(n); })
-            {
-                auto&& [ptr, count] = allocator_.allocate_at_least(n);
-                stor_.ls_ = { ptr, nullptr, ptr + count };
-            }
-            else
-            {
-                auto&& ptr = allocator_.allocate(n);
-                stor_.ls_ = { ptr, nullptr, ptr + n };
-            }
+
+#if defined(__cpp_lib_allocate_at_least) && (__cpp_lib_allocate_at_least >= 202302L)
+            auto&& [ptr, count] = allocator_.allocate_at_least(n);
+            stor_.ls_ = { ptr, nullptr, ptr + count };
+#else
+            auto&& ptr = allocator_.allocate(n);
+            stor_.ls_ = { ptr, nullptr, ptr + n };
+#endif
             size_flag_ = -1;
         }
 
@@ -762,6 +771,7 @@ namespace bizwen
         }
 
         // ********************************* begin constructor ******************************
+
         constexpr basic_string() noexcept = default;
 
         constexpr basic_string(null_t) noexcept
@@ -895,10 +905,8 @@ namespace bizwen
         {
         }
 
-// tagged constructors to construct from container compatible range
-#ifdef __cpp_lib_containers_ranges
-#if __cpp_lib_containers_ranges >= 202202L
-
+#if defined(__cpp_lib_containers_ranges) && (__cpp_lib_containers_ranges >= 202202L)
+        // tagged constructors to construct from container compatible range
         template <class R>
             requires std::ranges::range<R> && requires {
                 typename R::value_type;
@@ -929,10 +937,10 @@ namespace bizwen
                     push_back(*first);
             }
         }
-#endif
 #endif // __cpp_lib_containers_ranges
 
         // ********************************* begin append ******************************
+
         /**
          * @brief this version provide for InputIt version of assign, other version of append and operator+=
          */
@@ -1041,7 +1049,9 @@ namespace bizwen
 		}
 
         // clang-format on
+
         // ********************************* begin operator= ******************************
+
         basic_string(std::nullptr_t) = delete;
         constexpr basic_string& operator=(std::nullptr_t) = delete;
 
@@ -1086,6 +1096,7 @@ namespace bizwen
         // clang-format on
 
         // ********************************* begin compare ******************************
+
         friend constexpr std::strong_ordering operator<=>(basic_string const& lhs, basic_string const& rhs)
         {
             if (lhs.size_() > rhs.size_())
@@ -1153,6 +1164,7 @@ namespace bizwen
 			std::basic_string_view<CharT, Traits> sv = t;
 			return append(sv.data(), sv.size());
 		}
+
 		template <class StringViewLike>
 			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
 		constexpr basic_string& append(const StringViewLike& t, size_type pos, size_type count = npos)
@@ -1166,7 +1178,9 @@ namespace bizwen
 		}
 
         // clang-format on
+
         // ********************************* begin operator+= ******************************
+
         // clang-format off
 		template <class StringViewLike>
 			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
@@ -1176,6 +1190,7 @@ namespace bizwen
 		}
 
         // clang-format on
+
         constexpr basic_string& operator+=(const basic_string& str)
         {
             return append(str.begin_(), str.end_());
@@ -1199,6 +1214,7 @@ namespace bizwen
         }
 
         // ********************************* begin search ******************************
+
     private:
         constexpr bool static equal_(CharT const* begin, CharT const* end, CharT const* first, CharT const* last) noexcept
         {
@@ -1267,7 +1283,40 @@ namespace bizwen
             return equal_(s, s + length, end - length, end);
         }
 
+#if defined(__cpp_lib_string_contains) && (__cpp_lib_string_contains >= 202011L)
+        constexpr bool contains(std::basic_string_view<CharT, Traits> sv) const noexcept
+        {
+            auto size = sv.size();
+            auto begin = begin_();
+            auto data = sv.data();
+            if (size_() < size)
+                return false;
+            // opti for starts_with
+            if (equal_(begin, begin + size, data, data + size))
+                return true;
+            return std::basic_string_view<CharT, Traits>{ begin + 1, end_() }.contains(sv);
+        }
+
+        constexpr bool contains(CharT ch) const noexcept
+        {
+            if (empty())
+                return false;
+            for (auto begin = begin_(), end = end_(); begin != end; ++begin)
+            {
+                if (*begin == ch)
+                    return true;
+            }
+            return false;
+        }
+
+        constexpr bool contains(const CharT* s) const noexcept
+        {
+            return std::basic_string_view<CharT, Traits>{ begin_(), end_() }.contains(std::basic_string_view<CharT, Traits>{ s, s + c_style_string_length_(s) });
+        }
+#endif
+
         // ********************************* begin destructor ******************************
+
         constexpr ~basic_string()
         {
             if (is_long_())
