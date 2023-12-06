@@ -636,6 +636,8 @@ namespace bizwen
                     return std::wcslen(begin);
                 }
             }
+
+            // fallback for consteval and unicode char types
             auto end = begin;
             for (; *end != CharT{}; ++end)
                 ;
