@@ -130,11 +130,6 @@ namespace bizwen
 
         static inline constexpr size_type npos = -1;
 
-        constexpr allocator_type get_allocator() const
-        {
-            return allocator_;
-        }
-
         /**
          * @brief check if string is null
          * @brief the only way to create a null string is through the null_t constructor
@@ -656,20 +651,6 @@ namespace bizwen
 
             fill_(begin, end);
             resize_(size);
-        }
-
-        /**
-         * @brief this is the only function that shrink
-         * @brief after calling this function, the string is equivalent to the default constructed state
-         * @brief this function is designed for allocator assignment, do not call it from any other function
-        */
-        constexpr void reset_() noexcept
-        {
-            if (is_long_())
-                dealloc_(stor_.ls_);
-            size_flag_ = 0;
-            auto& ss = stor_.ss_;
-            ss = decltype(ss){};
         }
 
     public:
