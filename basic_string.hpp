@@ -27,10 +27,12 @@ namespace bizwen
         /*
          * @brief type of null tag
          */
-        enum null_t : char
+        enum class null_t : char
         {
-            null
+            null_v
         };
+
+        using null_t::null_v;
 
         /**
          * @brief type of long string
@@ -76,8 +78,7 @@ namespace bizwen
          * @brief short_string_max_ is the max length of short string
          */
         static inline constexpr std::size_t short_string_max_{ sizeof(storage_type_::ss_) / sizeof(CharT*) - 1 };
-
-        static inline constexpr bool nothrow_move_allocator_ = std::is_nothrow_move_constructible_v<Allocator>;
+        using atraits_t_ = std::allocator_traits<Allocator>;
 
         constexpr bool is_long_() const noexcept
         {
@@ -138,7 +139,7 @@ namespace bizwen
          * @brief check if string is null
          * @brief the only way to create a null string is through the null_t constructor
          */
-        constexpr bool is_null() const noexcept
+        constexpr bool null() const noexcept
         {
             return is_null_();
         }
@@ -316,25 +317,10 @@ namespace bizwen
             return std::basic_string_view<CharT, Traits>(begin_(), end_());
         }
 
-        // ********************************* begin swap ******************************
-
-        constexpr void swap(basic_string& other) noexcept(nothrow_move_allocator_)
-        {
-            assert(("string is null", !is_null_()));
-            auto&& self = *this;
-            std::ranges::swap(self.allocator_, other.allocator_);
-            std::ranges::swap(self.stor_, other.stor_);
-            std::ranges::swap(self.size_flag_, other.size_flag_);
-        }
-
-        friend void swap(basic_string& self, basic_string& other) noexcept(nothrow_move_allocator_)
-        {
-            self.swap(other);
-        }
-
         // ********************************* begin iterator type ******************************
 
     private:
+
         struct iterator_type_
         {
             using difference_type = std::ptrdiff_t;
@@ -557,10 +543,10 @@ namespace bizwen
             ++n;
 
 #if defined(__cpp_lib_allocate_at_least) && (__cpp_lib_allocate_at_least >= 202302L)
-            auto&& [ptr, count] = allocator_.allocate_at_least(n);
+            auto&& [ptr, count] = atraits_t_.allocate_at_least(allocator_, n);
             stor_.ls_ = { ptr, nullptr, ptr + count };
 #else
-            auto&& ptr = allocator_.allocate(n);
+            auto&& ptr = atraits_t_::allocate(allocator_, n);
             stor_.ls_ = { ptr, nullptr, ptr + n };
 #endif
             size_flag_ = -1;
@@ -574,7 +560,7 @@ namespace bizwen
         constexpr void dealloc_(ls_type_& ls) noexcept
         {
             assert(("string is null", !is_null_()));
-            allocator_.deallocate(ls.begin_, ls.last_ - ls.begin_);
+            atraits_t_::deallocate(allocator_, ls.begin_, ls.last_ - ls.begin_);
         }
 
         /**
@@ -637,7 +623,6 @@ namespace bizwen
                 }
             }
 
-            // fallback for consteval and unicode char types
             auto end = begin;
             for (; *end != CharT{}; ++end)
                 ;
@@ -671,6 +656,20 @@ namespace bizwen
 
             fill_(begin, end);
             resize_(size);
+        }
+
+        /**
+         * @brief this is the only function that shrink
+         * @brief after calling this function, the string is equivalent to the default constructed state
+         * @brief this function is designed for allocator assignment, do not call it from any other function
+        */
+        constexpr void reset_() noexcept
+        {
+            if (is_long_())
+                dealloc_(stor_.ls_);
+            size_flag_ = 0;
+            auto& ss = stor_.ss_;
+            ss = decltype(ss){};
         }
 
     public:
@@ -772,6 +771,22 @@ namespace bizwen
             resize_(size + 1);
         }
 
+        // ********************************* begin swap ******************************
+
+        constexpr void swap(basic_string& other) noexcept
+        {
+            assert(("string is null", !is_null_()));
+            auto&& self = *this;
+            std::ranges::swap(self.allocator_, other.allocator_);
+            std::ranges::swap(self.stor_, other.stor_);
+            std::ranges::swap(self.size_flag_, other.size_flag_);
+        }
+
+        friend void swap(basic_string& self, basic_string& other) noexcept
+        {
+            self.swap(other);
+        }
+
         // ********************************* begin constructor ******************************
 
         constexpr basic_string() noexcept = default;
@@ -808,21 +823,20 @@ namespace bizwen
 
         constexpr basic_string(basic_string&& other, size_type pos, size_type count)
         {
+            auto size = other.size_();
+            count = pos + count > size ? count : size - pos;
             assert(("count too long", other.size_() > count));
-            if (pos != 0)
+
+            if (pos == 0)
             {
-                allocate_plus_one_(count);
                 for (auto start = other.begin_(), begin = start + pos, end = other.begin_() + pos + count; begin != end; ++begin, ++start)
                 {
                     *start = *begin;
                 }
-                resize_(count);
-            }
-            else
-            {
                 other.resize_(count);
-                other.swap(*this);
             }
+
+            other.swap(*this);
         }
 
         constexpr basic_string(basic_string&& other, size_type pos) : basic_string(std::move(other), pos, other.size_() - pos)
@@ -858,7 +872,7 @@ namespace bizwen
             }
         }
 
-        constexpr basic_string(const basic_string& other, const Allocator& alloc) : allocator_(alloc)
+        constexpr basic_string(const basic_string& other) : allocator_(other.allocator_)
         {
             auto size = other.size_();
             allocate_plus_one_(size);
@@ -866,26 +880,9 @@ namespace bizwen
             resize_(size);
         }
 
-        constexpr basic_string(const basic_string& other) : basic_string(other, other.allocator_)
-        {
-        }
-
         constexpr basic_string(basic_string&& other) noexcept
         {
             other.swap(*this);
-        }
-
-        constexpr basic_string(basic_string&& other, const Allocator& alloc)
-        {
-            if (other.allocator_ == alloc)
-                other.swap(*this);
-            else
-            {
-                allocator_ = alloc;
-                allocate_plus_one_(other.size_());
-                fill_(other.begin_(), other.end_());
-                resize_(other.size_());
-            }
         }
 
         constexpr basic_string(std::initializer_list<CharT> ilist) : basic_string(std::data(ilist), ilist.size())
@@ -1057,7 +1054,7 @@ namespace bizwen
         basic_string(std::nullptr_t) = delete;
         constexpr basic_string& operator=(std::nullptr_t) = delete;
 
-        constexpr basic_string& operator=(basic_string&& other) noexcept(nothrow_move_allocator_)
+        constexpr basic_string& operator=(basic_string&& other) noexcept
         {
             other.swap(*this);
             return *this;
@@ -1065,7 +1062,6 @@ namespace bizwen
 
         constexpr basic_string& operator=(const basic_string& str)
         {
-            allocator_ = str.allocator_;
             assign_(str.begin_(), str.end_());
             return *this;
         }
