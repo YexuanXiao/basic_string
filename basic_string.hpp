@@ -42,7 +42,6 @@ namespace bizwen
             CharT* last_{};
         };
 
-        
         /**
          * @brief short_string_max_ is the max length of short string
          */
@@ -52,6 +51,7 @@ namespace bizwen
          * @brief union storage long string and short string
          */
 #pragma pack(1)
+
         union storage_type_ {
             std::array<CharT, short_string_max_ + 1> ss_;
             ls_type_ ls_;
@@ -81,7 +81,7 @@ namespace bizwen
 
         using atraits_t_ = std::allocator_traits<Allocator>;
 
-        static inline char exception_string[] = "parameter is out of range, please check it."; 
+        static inline char exception_string[] = "parameter is out of range, please check it.";
 
         constexpr bool is_long_() const noexcept
         {
@@ -681,6 +681,24 @@ namespace bizwen
             resize_(size);
         }
 
+        constexpr void insert_(size_type index, CharT const* first, CharT const* last)
+        {
+            assert(("can't self insert", first > end_() || last < begin_()));
+
+            auto size = size_();
+
+            if (index > size)
+                throw std::out_of_range{ exception_string };
+
+            auto length = last - first;
+            reserve(size + length);
+            auto begin = begin_();
+            auto end = begin + size;
+            std::copy_backward(begin + index, end, end + length);
+            std::copy(first, last, begin + index);
+            resize_(size + length);
+        }
+
     public:
         /**
          * @brief reserve memory
@@ -909,11 +927,11 @@ namespace bizwen
         }
 
         // clang-format off
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		constexpr basic_string(const StringViewLike& t) : basic_string(std::basic_string_view<CharT, Traits>{ t }.data(), std::basic_string_view<CharT, Traits>{ t }.size())
-		{
-		}
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string(const StringViewLike& t) : basic_string(std::basic_string_view<CharT, Traits>{ t }.data(), std::basic_string_view<CharT, Traits>{ t }.size())
+        {
+        }
 
         // clang-format on
 
@@ -994,7 +1012,7 @@ namespace bizwen
             auto end = begin + count;
             std::fill(begin, end, ch);
             resize_(count);
-            
+
             return *this;
         }
 
@@ -1058,33 +1076,33 @@ namespace bizwen
         }
 
         // clang-format off
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		basic_string& assign(const StringViewLike& t)
-		{
-			std::basic_string_view<CharT, Traits> sv = t;
-			auto data = sv.data();
-			assign_(data, data + sv.size());
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        basic_string& assign(const StringViewLike& t)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
+            auto data = sv.data();
+            assign_(data, data + sv.size());
 
-			return *this;
-		}
+            return *this;
+        }
 
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		constexpr basic_string& assign(const StringViewLike& t, size_type pos, size_type count = npos)
-		{
-			std::basic_string_view<CharT, Traits> sv = t;
-			auto sv_size = sv.size();
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& assign(const StringViewLike& t, size_type pos, size_type count = npos)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
+            auto sv_size = sv.size();
 
-			if (pos > sv_size)
-				throw std::out_of_range{ exception_string };
+            if (pos > sv_size)
+                throw std::out_of_range{ exception_string };
 
-			count = std::min(npos, std::min(sv_size - pos, count));
-			auto data = sv.data();
-			assign_(data + pos, data + pos + count);
+            count = std::min(npos, std::min(sv_size - pos, count));
+            auto data = sv.data();
+            assign_(data + pos, data + pos + count);
 
-			return *this;
-		}
+            return *this;
+        }
 
         // clang-format on
 
@@ -1122,12 +1140,12 @@ namespace bizwen
         }
 
         // clang-format off
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		constexpr basic_string& operator=(const StringViewLike& t)
-		{
-			return assign(t);
-		}
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& operator=(const StringViewLike& t)
+        {
+            return assign(t);
+        }
 
         // clang-format on
 
@@ -1210,43 +1228,43 @@ namespace bizwen
         }
 
         // clang-format off
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		constexpr basic_string& append(const StringViewLike& t)
-		{
-			std::basic_string_view<CharT, Traits> sv = t;
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& append(const StringViewLike& t)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
             auto data = sv.data();
-			append_(data, data + sv.size());
+            append_(data, data + sv.size());
 
             return *this;
-		}
+        }
 
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		constexpr basic_string& append(const StringViewLike& t, size_type pos, size_type count = npos)
-		{
-			std::basic_string_view<CharT, Traits> sv = t;
-			auto sv_size = sv.size();
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& append(const StringViewLike& t, size_type pos, size_type count = npos)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
+            auto sv_size = sv.size();
 
-			if (pos > sv_size)
-				throw std::out_of_range{ exception_string };
+            if (pos > sv_size)
+                throw std::out_of_range{ exception_string };
 
-			count = std::min(npos, std::min(sv_size - count, count));
+            count = std::min(npos, std::min(sv_size - count, count));
 
-			return append(sv.data() + pos, count);
-		}
+            return append(sv.data() + pos, count);
+        }
 
         // clang-format on
 
         // ********************************* begin operator+= ******************************
 
         // clang-format off
-		template <class StringViewLike>
-			requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-		constexpr basic_string& operator+=(const StringViewLike& t)
-		{
-			return append(t);
-		}
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& operator+=(const StringViewLike& t)
+        {
+            return append(t);
+        }
 
         // clang-format on
 
@@ -1383,23 +1401,6 @@ namespace bizwen
 
         // ********************************* begin insert ******************************
 
-        constexpr void insert(CharT* pos, CharT const* first, CharT const* last)
-        {
-            assert(("pos isn't in this string", begin_() >= pos));
-
-            auto size = size_();
-            auto length = last - first;
-            auto end = end_();
-
-            if (pos > end)
-                throw std::out_of_range{ exception_string };
-
-            reserve(size + length);
-            std::copy_backward(pos, end, end + length);
-            std::copy(pos, pos + length, first);
-            resize_(size + length);
-        }
-
         constexpr basic_string& insert(size_type index, size_type count, CharT ch)
         {
             auto size = size_();
@@ -1420,7 +1421,7 @@ namespace bizwen
 
         constexpr basic_string& insert(size_type index, const CharT* s, size_type count)
         {
-            insert_(begin_() + index, s, s + count);
+            insert_(index, s, s + count);
 
             return *this;
         }
@@ -1432,7 +1433,7 @@ namespace bizwen
 
         constexpr basic_string& insert(size_type index, const basic_string& str)
         {
-            insert_(begin_() + index, str.begin_(), str.end_());
+            insert_(index, str.begin_(), str.end_());
 
             return *this;
         }
@@ -1444,9 +1445,9 @@ namespace bizwen
             if (s_index > s_size)
                 throw std::out_of_range{ exception_string };
 
-            count = std::min(npos, std::min(s_size - index, count));
-            auto s_start = str.begin_() + index;
-            insert_(begin_() + index, s_start, s_start + count);
+            count = std::min(npos, std::min(s_size - s_index, count));
+            auto s_start = str.begin_() + s_index;
+            insert_(index, s_start, s_start + count);
 
             return *this;
         }
@@ -1454,16 +1455,20 @@ namespace bizwen
         constexpr iterator insert(const_iterator pos, CharT ch)
         {
             auto size = size_();
+            auto start = pos.base().current_;
+            auto end = end_();
+            auto index = start - begin_();
 
-            if (pos > size)
+            if (start > end)
                 throw std::out_of_range{ exception_string };
 
             reserve(size + 1);
-            auto end = end_();
-            std::copy_backward(pos, end, end + 1);
-            *pos = ch;
+            auto begin = begin_();
+            end = begin + size;
+            start = begin + index;
+            std::copy_backward(start, end, end + 1);
+            *start = ch;
             resize_(size + 1);
-            auto start = pos.base().current_;
 
 #ifndef NDEBUG
             return { start, this };
@@ -1494,10 +1499,10 @@ namespace bizwen
 
         constexpr iterator insert(const_iterator pos, std::initializer_list<CharT> ilist)
         {
-            auto i_data = ilist.data();
+            auto i_data = std::data(ilist);
             auto start = pos.base().current_;
 
-            insert_(start, i_data, i_data + ilist.size());
+            insert_(start - begin_(), i_data, i_data + ilist.size());
 
 #ifndef NDEBUG
             return { start, this };
@@ -1508,18 +1513,18 @@ namespace bizwen
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>>&& std::is_convertible_v<const StringViewLike&, const CharT*>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& insert(size_type pos, const StringViewLike& t)
         {
             std::basic_string_view<CharT, Traits> sv = t;
             auto sv_data = sv.data();
-            insert_(begin_() + pos, sv_data, sv_data + sv.size());
+            insert_(pos, sv_data, sv_data + sv.size());
 
             return *this;
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>>&& std::is_convertible_v<const StringViewLike&, const CharT*>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& insert(size_type pos, const StringViewLike& t, size_type t_index, size_type count = npos)
         {
             std::basic_string_view<CharT, Traits> sv = t;
@@ -1532,7 +1537,7 @@ namespace bizwen
 
             count = std::min(npos, std::min(sv_size - t_index, count));
             auto sv_data = sv.data();
-            insert_(begin_() + pos, sv_data + t_index, sv_data + t_index + count);
+            insert_(pos, sv_data + t_index, sv_data + t_index + count);
 
             return *this;
         }
@@ -1609,6 +1614,7 @@ namespace bizwen
         auto size = size_();
         auto start = pos.base().current_;
         auto end = end_();
+        auto index = start - begin_();
 
         if (start > end)
             throw std::out_of_range{ exception_string };
@@ -1617,8 +1623,9 @@ namespace bizwen
         {
             auto length = std::distance(first, last);
             reserve(size + length);
-            std::copy_backward(start, end, end + length);
-            std::ranges::copy(first, last, start);
+            auto begin = begin_();
+            std::copy_backward(begin + index, begin + size, begin + size + length);
+            std::ranges::copy(first, last, begin + index);
             resize_(size + length);
         }
         else
@@ -1631,12 +1638,12 @@ namespace bizwen
         }
 
 #ifndef NDEBUG
-            return { start, this };
+        return { start, this };
 #else
-            return { start };
+        return { start };
 #endif
     }
-
+    
     static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(int*) * 4);
     static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(int*) * 4);
     static_assert(sizeof(bizwen::basic_string<char32_t>) == sizeof(int*) * 4);
