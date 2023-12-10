@@ -21,7 +21,7 @@ namespace bizwen
     template <typename T>
     concept character = is_character_v<T>;
 
-    template <character CharT, class Traits = std::char_traits<CharT>, class Allocator = std::allocator<CharT>> class basic_string
+    template <character CharT, class Traits = std::char_traits<CharT>, class Allocator = std::allocator<CharT>> class alignas(alignof(int*)) basic_string
     {
     private:
         /*
@@ -42,11 +42,18 @@ namespace bizwen
             CharT* last_{};
         };
 
+        
+        /**
+         * @brief short_string_max_ is the max length of short string
+         */
+        static inline constexpr std::size_t short_string_max_{ sizeof(CharT*) * 4 / sizeof(CharT) - 2 };
+
         /**
          * @brief union storage long string and short string
          */
+#pragma pack(1)
         union storage_type_ {
-            std::array<CharT, sizeof(CharT*) * 4 / sizeof(CharT) - 1> ss_;
+            std::array<CharT, short_string_max_ + 1> ss_;
             ls_type_ ls_;
         };
 
@@ -70,12 +77,7 @@ namespace bizwen
          * @brief flag = -1: long string, length of string is end - begin
          * @brief flag = -2: null string
          */
-        signed char size_flag_{};
-
-        /**
-         * @brief short_string_max_ is the max length of short string
-         */
-        static inline constexpr std::size_t short_string_max_{ sizeof(storage_type_::ss_) / sizeof(CharT*) - 1 };
+        typename std::make_signed_t<CharT> size_flag_{};
 
         using atraits_t_ = std::allocator_traits<Allocator>;
 
@@ -1628,5 +1630,8 @@ namespace bizwen
         return *this;
     }
 
+    static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(int*) * 4);
+    static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(int*) * 4);
+    static_assert(sizeof(bizwen::basic_string<char32_t>) == sizeof(int*) * 4);
     // clang-format on
 }
