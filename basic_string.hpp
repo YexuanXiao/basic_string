@@ -991,8 +991,9 @@ namespace bizwen
             auto begin = begin_();
             auto end = begin + count;
             std::fill(begin, end, ch);
-
             resize_(count);
+            
+            return *this;
         }
 
         constexpr basic_string& assign(const basic_string& str)
@@ -1627,7 +1628,11 @@ namespace bizwen
             append_(temp.begin_(), temp.end_());
         }
 
-        return *this;
+#ifndef NDEBUG
+            return { start, this };
+#else
+            return { start };
+#endif
     }
 
     static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(int*) * 4);
