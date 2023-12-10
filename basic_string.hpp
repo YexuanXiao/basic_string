@@ -721,11 +721,13 @@ namespace bizwen
          */
         constexpr void resize(size_type count, CharT ch)
         {
-            if (count > size_())
+            auto size = size_();
+
+            if (count > size)
             {
                 reserve(count);
-                auto end = end_();
-                std::fill(end, end + count, ch);
+                auto begin = begin_();
+                std::fill(begin + size, begin + count, ch);
             }
 
             resize_(count);
