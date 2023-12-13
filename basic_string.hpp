@@ -81,7 +81,7 @@ namespace bizwen
 
         using atraits_t_ = std::allocator_traits<Allocator>;
 
-        static inline char exception_string[] = "parameter is out of range, please check it.";
+        static inline char exception_string_[] = "parameter is out of range, please check it.";
 
         constexpr bool is_long_() const noexcept
         {
@@ -278,7 +278,7 @@ namespace bizwen
         constexpr const_reference at(size_type pos) const
         {
             if (pos >= size_())
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             return *(begin_() + pos);
         }
@@ -681,6 +681,11 @@ namespace bizwen
             resize_(size);
         }
 
+        /**
+         * @brief insert characters to *this
+         * @brief this function can be called with any legal state
+         * @brief strong exception safety guarantee
+         */
         constexpr void insert_(size_type index, CharT const* first, CharT const* last)
         {
             assert(("can't self insert", first > end_() || last < begin_()));
@@ -688,7 +693,7 @@ namespace bizwen
             auto size = size_();
 
             if (index > size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             auto length = last - first;
             reserve(size + length);
@@ -780,26 +785,9 @@ namespace bizwen
             auto size = size_();
 
             if (capacity() == size)
-            {
-                // long string
-                if (is_long_())
-                {
-                    auto ls = stor_.ls_;
-                    allocate_plus_one_(size * 2);
-                    fill_(ls.begin_, ls.end_);
-                    dealloc_(ls);
-                    *(ls.end_ - 1) = ch;
-                }
-                else
-                {
-                    auto ss = stor_.ss_;
-                    auto data = ss.data();
-                    allocate_plus_one_(size * 2);
-                    fill_(ss, ss + size);
-                    *(ss + size) = ch;
-                }
-            }
+                reserve(size * 2);
 
+            *end_() == ch;
             resize_(size + 1);
         }
 
@@ -842,7 +830,7 @@ namespace bizwen
             auto other_size = other.size_();
 
             if (pos > other_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(other_size - pos, count);
             allocate_plus_one_(count);
@@ -860,7 +848,7 @@ namespace bizwen
             auto other_size = other.size_();
 
             if (pos > other_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(other_size - pos, count);
 
@@ -944,7 +932,7 @@ namespace bizwen
             auto sv_size = sv.size();
 
             if (pos > sv_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             n = std::min(sv_size - pos, n);
             allocate_plus_one_(n);
@@ -1028,7 +1016,7 @@ namespace bizwen
             auto str_size = str.size_();
 
             if (pos > str_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(str_size - pos, count));
             auto str_begin = begin_();
@@ -1095,7 +1083,7 @@ namespace bizwen
             auto sv_size = sv.size();
 
             if (pos > sv_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(sv_size - pos, count));
             auto data = sv.data();
@@ -1205,7 +1193,7 @@ namespace bizwen
             auto str_size = str.size_();
 
             if (pos > str_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(str_size - pos, count));
 
@@ -1247,7 +1235,7 @@ namespace bizwen
             auto sv_size = sv.size();
 
             if (pos > sv_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(sv_size - count, count));
 
@@ -1406,7 +1394,7 @@ namespace bizwen
             auto size = size_();
 
             if (index > size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             reserve(size + count);
             auto start = begin_() + index;
@@ -1443,7 +1431,7 @@ namespace bizwen
             auto s_size = str.size_();
 
             if (s_index > s_size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(s_size - s_index, count));
             auto s_start = str.begin_() + s_index;
@@ -1460,7 +1448,7 @@ namespace bizwen
             auto index = start - begin_();
 
             if (start > end)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             reserve(size + 1);
             auto begin = begin_();
@@ -1533,7 +1521,7 @@ namespace bizwen
             auto size = size_();
 
             if (t_index > sv_size || pos > size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(sv_size - t_index, count));
             auto sv_data = sv.data();
@@ -1561,7 +1549,7 @@ namespace bizwen
             auto size = size_();
 
             if (index > size)
-                throw std::out_of_range{ exception_string };
+                throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(size - index, count));
             auto start = begin_() + index;
@@ -1617,7 +1605,7 @@ namespace bizwen
         auto index = start - begin_();
 
         if (start > end)
-            throw std::out_of_range{ exception_string };
+            throw std::out_of_range{ exception_string_ };
 
         if constexpr (std::forward_iterator<InputIt>)
         {
