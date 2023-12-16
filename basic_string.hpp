@@ -229,13 +229,9 @@ namespace bizwen
             assert(("string is null", !is_null_()));
 
             if (is_long_())
-            {
                 return stor_.ls_.begin_;
-            }
             else
-            {
                 return stor_.ss_.data();
-            }
         }
 
         /**
@@ -291,7 +287,7 @@ namespace bizwen
 
         constexpr reference at(size_type pos)
         {
-            return const_cast<reference>(const_cast<basic_string const&>(*this).at(pos));
+            return const_cast<CharT&>(const_cast<basic_string const&>(*this).at(pos));
         }
 
         constexpr const_reference operator[](size_type pos) const noexcept
@@ -303,7 +299,7 @@ namespace bizwen
 
         constexpr reference operator[](size_type pos) noexcept
         {
-            return const_cast<reference>(const_cast<basic_string const&>(*this)[pos]);
+            return const_cast<CharT&>(const_cast<basic_string const&>(*this)[pos]);
         }
 
         constexpr const CharT& front() const noexcept
@@ -315,7 +311,7 @@ namespace bizwen
 
         constexpr CharT& front()
         {
-            return const_cast<reference>(const_cast<basic_string const&>(*this).front());
+            return const_cast<CharT&>(const_cast<basic_string const&>(*this).front());
         }
 
         constexpr const CharT& back() const noexcept
@@ -327,7 +323,7 @@ namespace bizwen
 
         constexpr CharT& back()
         {
-            return const_cast<reference>(const_cast<basic_string const&>(*this).back());
+            return const_cast<CharT&>(const_cast<basic_string const&>(*this).back());
         }
 
         constexpr operator std::basic_string_view<CharT, Traits>() const noexcept
