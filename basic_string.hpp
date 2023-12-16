@@ -206,7 +206,7 @@ namespace bizwen
         /**
          * @brief never shrink
          */
-        constexpr void shrink_to_fit() const noexcept
+        constexpr void shrink_to_fit() noexcept
         {
             return;
         }
@@ -713,25 +713,25 @@ namespace bizwen
          */
         constexpr void reserve(size_type new_cap)
         {
-            if (capacity() < new_cap)
+            if (capacity() >= new_cap)
+                return;
+            
+            if (is_long_())
             {
-                if (is_long_())
-                {
-                    auto ls = stor_.ls_;
-                    allocate_plus_one_(new_cap);
-                    fill_(ls.begin_, ls.end_);
-                    dealloc_(ls);
-                    resize_(ls.end_ - ls.begin_);
-                }
-                else
-                {
-                    auto ss = stor_.ss_;
-                    auto size = size_flag_;
-                    auto data = ss.data();
-                    allocate_plus_one_(new_cap);
-                    fill_(data, data + size);
-                    resize(size);
-                }
+                auto ls = stor_.ls_;
+                allocate_plus_one_(new_cap);
+                fill_(ls.begin_, ls.end_);
+                dealloc_(ls);
+                resize_(ls.end_ - ls.begin_);
+            }
+            else
+            {
+                auto ss = stor_.ss_;
+                auto size = size_flag_;
+                auto data = ss.data();
+                allocate_plus_one_(new_cap);
+                fill_(data, data + size);
+                resize(size);
             }
         }
 
@@ -777,7 +777,7 @@ namespace bizwen
         }
 
         /**
-         * @brief use size * 2 for growth
+         * @brief use size * 1.5 for growth
          * @param ch character to fill
          */
         constexpr void push_back(CharT ch)
@@ -785,9 +785,9 @@ namespace bizwen
             auto size = size_();
 
             if (capacity() == size)
-                reserve(size * 2);
+                reserve(size * 2 - size / 2);
 
-            *end_() == ch;
+            *end_() = ch;
             resize_(size + 1);
         }
 
@@ -1139,14 +1139,12 @@ namespace bizwen
 
         // ********************************* begin compare ******************************
 
-        friend constexpr std::strong_ordering operator<=>(basic_string const& lhs, basic_string const& rhs)
+        friend constexpr std::strong_ordering operator<=>(basic_string const& lhs, basic_string const& rhs) noexcept
         {
-            if (lhs.size_() > rhs.size_())
-                return std::strong_ordering::greater;
-            else if (lhs.size_() < rhs.size_())
-                return std::strong_ordering::less;
+            auto lsize = lhs.size_();
+            auto rsize = rhs.size_();
 
-            for (auto begin = lhs.begin_(), end = lhs.end_(), start = rhs.begin_(); begin != end; ++begin, ++start)
+            for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize), start = rhs.begin_(); begin != end; ++begin, ++start)
             {
                 if (*begin > *start)
                     return std::strong_ordering::greater;
@@ -1154,15 +1152,63 @@ namespace bizwen
                     return std::strong_ordering::less;
             }
 
+            if (lsize > rsize)
+                return std::strong_ordering::greater;
+            else if (lsize < rsize)
+                return std::strong_ordering::less;
+
             return std::strong_ordering::equal;
         }
 
-        friend constexpr bool operator==(basic_string const& lhs, basic_string const& rhs)
+        friend constexpr std::strong_ordering operator<=>(basic_string const& lhs, CharT const* rhs) noexcept
         {
-            if (lhs.size_() != rhs.size_())
+            auto start = rhs;
+            auto rsize = basic_string::c_style_string_length_(start);
+            auto lsize = lhs.size_();
+
+            for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize); begin != end; ++begin, ++start)
+            {
+                if (*begin > *start)
+                    return std::strong_ordering::greater;
+                else if (*begin < *start)
+                    return std::strong_ordering::less;
+            }
+
+            if (lsize > rsize)
+                return std::strong_ordering::greater;
+            else if (lsize < rsize)
+                return std::strong_ordering::less;
+
+            return std::strong_ordering::equal;
+        }
+
+        friend constexpr bool operator==(basic_string const& lhs, basic_string const& rhs) noexcept
+        {
+            auto lsize = lhs.size_();
+            auto rsize = rhs.size_();
+
+            if (lsize != rsize)
                 return false;
 
-            for (auto begin = lhs.begin_(), end = lhs.end_(), start = rhs.begin_(); begin != end; ++begin, ++start)
+            for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize), start = rhs.begin_(); begin != end; ++begin, ++start)
+            {
+                if (*begin != *start)
+                    return false;
+            }
+
+            return true;
+        }
+
+        friend constexpr bool operator==(basic_string const& lhs, CharT const* rhs) noexcept
+        {
+            auto start = rhs;
+            auto rsize = basic_string::c_style_string_length_(start);
+            auto lsize = lhs.size_();
+
+            if (lsize != rsize)
+                return false;
+
+            for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize); begin != end; ++begin, ++start)
             {
                 if (*begin != *start)
                     return false;
@@ -1173,6 +1219,29 @@ namespace bizwen
 
         // ********************************* begin append ******************************
 
+    private:
+        constexpr void append_(CharT const* first, CharT const* last)
+        {
+            auto length = last - first;
+            auto size = size_();
+            reserve(size + length);
+            auto end = begin_() + size;
+            std::copy(first, last, end);
+            resize_(size + length);
+        }
+
+    public:
+        constexpr basic_string& append(size_type count, CharT ch)
+        {
+            auto size = size_();
+            reserve(size + count);
+            auto end = begin_() + size;
+            std::fill(end, end + count, ch);
+            resize_(size + count);
+
+            return *this;
+        }
+
         constexpr basic_string& append(const CharT* s, size_type count)
         {
             append_(s, s + count);
@@ -1182,8 +1251,8 @@ namespace bizwen
 
         constexpr basic_string& append(const basic_string& str)
         {
-            auto data = str.data();
-            append_(data, data + str.size_());
+            auto begin = str.begin_();
+            append_(begin, begin + str.size_());
 
             return *this;
         }
@@ -1539,12 +1608,12 @@ namespace bizwen
         {
             assert(("first or last is not in this string", first >= begin_() && last <= end_()));
 
-            std::copy(last, end_(), first);
+            std::copy(last, const_cast<basic_string const&>(*this).end_(), first);
             resize_(size() - (last - first));
         }
 
     public:
-        constexpr basic_string& erase(size_type index = 0, size_type count = npos) noexcept
+        constexpr basic_string& erase(size_type index = 0, size_type count = npos)
         {
             auto size = size_();
 
@@ -1580,6 +1649,15 @@ namespace bizwen
 #else
             return { start };
 #endif
+        }
+
+        // ********************************* begin pop_back ******************************
+
+        constexpr void pop_back() noexcept
+        {
+            auto size = size_();
+            if (size > 0)
+                resize_(size - 1);
         }
 
         // ********************************* begin destructor ******************************
