@@ -735,6 +735,13 @@ namespace bizwen
         }
 
     public:
+
+        constexpr ~basic_string()
+        {
+            if (is_long_())
+                dealloc_(stor_.ls_);
+        }
+
         /**
          * @brief reserve memory
          * @brief strong exception safety guarantee
@@ -745,7 +752,7 @@ namespace bizwen
         {
             if (capacity() >= new_cap)
                 return;
-            
+
             if (is_long_())
             {
                 auto ls = stor_.ls_;
@@ -1662,7 +1669,42 @@ namespace bizwen
          */
         template <class InputIt>
             requires std::input_iterator<InputIt>
-        constexpr iterator insert(const_iterator pos, InputIt first, InputIt last);
+        constexpr iterator insert(const_iterator pos, InputIt first, InputIt last)
+        {
+            assert(("pos isn't in this string", pos.base().current_ >= begin_()));
+
+            auto size = size_();
+            auto start = pos.base().current_;
+            auto end = end_();
+            auto index = start - begin_();
+
+            if (start > end)
+                throw std::out_of_range{ exception_string_ };
+
+            if constexpr (std::forward_iterator<InputIt>)
+            {
+                auto length = std::distance(first, last);
+                reserve(size + length);
+                auto begin = begin_();
+                std::copy_backward(begin + index, begin + size, begin + size + length);
+                std::ranges::copy(first, last, begin + index);
+                resize_(size + length);
+            }
+            else
+            {
+                basic_string temp{ start, end };
+                resize_(pos - begin_());
+                for (; first != last; ++first)
+                    push_back(*first);
+                append_(temp.begin_(), temp.end_());
+            }
+
+#ifndef NDEBUG
+            return { start, this };
+#else
+            return { start };
+#endif
+        }
 
         constexpr iterator insert(const_iterator pos, std::initializer_list<CharT> ilist)
         {
@@ -1776,56 +1818,7 @@ namespace bizwen
             assert(("string is empty", !is_empty_()));
             resize_(size_() - 1);
         }
-
-        // ********************************* begin destructor ******************************
-
-        constexpr ~basic_string()
-        {
-            if (is_long_())
-                dealloc_(stor_.ls_);
-        }
     };
-
-    // clang-format off
-    // implement of insert
-    template <character CharT, class Traits, class Allocator>
-    template <class InputIt> requires std::input_iterator<InputIt>
-    constexpr typename basic_string<CharT, Traits, Allocator>::iterator basic_string<CharT, Traits, Allocator>::insert(const_iterator pos, InputIt first, InputIt last)
-    {
-        assert(("pos isn't in this string", pos.base().current_ >= begin_()));
-
-        auto size = size_();
-        auto start = pos.base().current_;
-        auto end = end_();
-        auto index = start - begin_();
-
-        if (start > end)
-            throw std::out_of_range{ exception_string_ };
-
-        if constexpr (std::forward_iterator<InputIt>)
-        {
-            auto length = std::distance(first, last);
-            reserve(size + length);
-            auto begin = begin_();
-            std::copy_backward(begin + index, begin + size, begin + size + length);
-            std::ranges::copy(first, last, begin + index);
-            resize_(size + length);
-        }
-        else
-        {
-            basic_string temp{ start, end };
-            resize_(pos - begin_());
-            for (; first != last; ++first)
-                push_back(*first);
-            append_(temp.begin_(), temp.end_());
-        }
-
-#ifndef NDEBUG
-        return { start, this };
-#else
-        return { start };
-#endif
-    }
     
     static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(int*) * 4);
     static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(int*) * 4);
