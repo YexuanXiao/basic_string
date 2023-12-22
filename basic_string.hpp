@@ -184,15 +184,11 @@ namespace bizwen
         }
 
         /**
-         * @return size_type{ -1 } / 2 on 64-bit arch
-         * @return size_type{ -1 } - 2 on 32-bit arch
+         * @return size_type{ -1 } / sizeof(CharT) / 2
          */
         constexpr size_type max_size() const noexcept
         {
-            if constexpr (sizeof(size_type) > 4)
-                return size_type{ -1 } / 2;
-            else
-                return size_type{ -1 } - 2;
+            return size_type{ -1 } / sizeof(CharT) / 2;
         }
 
         constexpr size_type capacity() const noexcept
@@ -217,7 +213,7 @@ namespace bizwen
             if (size_() <= short_string_max_ && is_long_())
             {
                 auto ls = stor_.ls_;
-                
+
                 if BIZWEN_CONSTEVAL
                 {
                     stor_.ss_ = decltype(stor_.ss_){};
@@ -730,11 +726,12 @@ namespace bizwen
 
             auto length = last - first;
             auto new_size = size + length;
+            auto begin = begin_();
+            auto end = begin + size;
 
             // if start is not in range and capacity > length + size
-            if (auto begin = begin_(), start = begin + index; (start < first || start > last) && capacity() > new_size)
+            if (auto start = begin + index; (start < first || start > last) && capacity() > new_size)
             {
-                auto end = begin + size;
 
                 if BIZWEN_CONSTEVAL
                 {
@@ -745,8 +742,8 @@ namespace bizwen
                     std::memmove(end, begin + index, length * sizeof(CharT));
                 }
 
-                // re-cacl first and last, because range is in *this 
-                if (first >= begin && last <= end)
+                // re-cacl first and last, because range is in *this
+                if (first >= start && last <= end)
                 {
                     first += index;
                     last += index;
@@ -777,9 +774,9 @@ namespace bizwen
                 }
                 else
                 {
-                    std::memcpy(start, begin, sizeof(CharT) * index);
+                    std::memcpy(start, begin, index * sizeof(CharT));
                     std::memcpy(temp_start, first, length * sizeof(CharT));
-                    std::memcpy(temp_start + length, start, (size - index) * sizeof(CharT));
+                    std::memcpy(temp_start + length, start, (end - start) * sizeof(CharT));
                 }
 
                 temp.swap(*this);
@@ -789,7 +786,6 @@ namespace bizwen
         }
 
     public:
-
         constexpr ~basic_string()
         {
             if (is_long_())
@@ -1872,8 +1868,80 @@ namespace bizwen
             assert(("string is empty", !is_empty_()));
             resize_(size_() - 1);
         }
+
+        // ********************************* begin replace ******************************
+
+    private:
+        constexpr void replace_(CharT* first1, CharT* last1, CharT const* first2, CharT const* last2)
+        {
+            auto length1 = last1 - first1;
+            auto length2 = last2 - first2;
+            auto diff = length1 - length2;
+            auto size = size_();
+            auto new_size = size + length1 - length2;
+            auto begin = begin_();
+            auto end = begin + size;
+
+            if (!(last1 < first2 || last2 < first1) && new_size <= capacity())
+            {
+
+                if BIZWEN_CONSTEVAL
+                {
+                    if (diff > 0)
+                        std::copy(last1, end, last1 - diff);
+                    else if (diff < 0)
+                        std::copy_backward(last1, end, end - diff);
+                }
+                else
+                {
+                    if (diff > 0)
+                        std::memmove(last1 + diff, last1, diff * sizeof(CharT));
+                    else if (diff < 0)
+                        std::memmove(last1 - diff, last1, -diff * sizeof(CharT));
+                }
+
+                if (first2 >= last1 && last2 <= end)
+                {
+                    first2 += diff;
+                    last2 += diff;
+                }
+
+                if BIZWEN_CONSTEVAL
+                {
+                    std::copy(first2, last2, first1);
+                }
+                else
+                {
+                    std::memmove(first1, first2, length2 * sizeof(CharT));
+                }
+            }
+            else
+            {
+                basic_string temp{};
+                temp.allocate_plus_one_(new_size);
+                auto temp_begin = temp.begin_();
+                auto temp_start = temp.begin_() + (first1 - begin);
+                
+                if BIZWEN_CONSTEVAL
+                {
+                    std::copy(begin, first1, temp_begin);
+                    std::copy(first2, last2, temp_start);
+                    std::copy(last1, end, temp_start + length2);
+                }
+                else
+                {
+                    std::memcpy(begin, temp_begin, first1 - begin * sizeof(CharT));
+                    std::memcpy(temp_start, first2, length2 * sizeof(CharT));
+                    std::memcpy(temp_start + length2, last1, (end - last1) * sizeof(CharT));
+                }
+
+                temp.swap(*this);
+            }
+
+            resize_(new_size);
+        }
     };
-    
+
     static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(int*) * 4);
     static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(int*) * 4);
     static_assert(sizeof(bizwen::basic_string<char32_t>) == sizeof(int*) * 4);
