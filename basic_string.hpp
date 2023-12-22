@@ -210,11 +210,26 @@ namespace bizwen
         }
 
         /**
-         * @brief never shrink
+         * @brief shrink only occur on short string is enough to storage
          */
         constexpr void shrink_to_fit() noexcept
         {
-            return;
+            if (size_() <= short_string_max_ && is_long_())
+            {
+                auto ls = stor_.ls_;
+                
+                if BIZWEN_CONSTEVAL
+                {
+                    stor_.ss_ = decltype(stor_.ss_){};
+                    std::copy(ls.begin_, ls.end_, stor_.ss_.data());
+                }
+                else
+                {
+                    std::memcpy(stor_.ss_.data(), ls.begin_, (ls.end_ - ls.begin_) * sizeof(CharT));
+                }
+
+                dealloc_(ls);
+            }
         }
 
         // ********************************* begin element access ******************************
