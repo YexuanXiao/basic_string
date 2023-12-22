@@ -1643,7 +1643,9 @@ namespace bizwen
 
         constexpr basic_string& insert(size_type index, const CharT* s)
         {
-            return insert(index, s, c_style_string_length_(s));
+            insert_(index, s, s + c_style_string_length_(s));
+
+            return *this;
         }
 
         constexpr basic_string& insert(size_type index, const basic_string& str)
@@ -1673,10 +1675,6 @@ namespace bizwen
             auto start = pos.base().current_;
             auto end = end_();
             auto index = start - begin_();
-
-            if (start > end)
-                throw std::out_of_range{ exception_string_ };
-
             reserve(size + 1);
             auto begin = begin_();
             end = begin + size;
@@ -1721,15 +1719,12 @@ namespace bizwen
             requires std::input_iterator<InputIt>
         constexpr iterator insert(const_iterator pos, InputIt first, InputIt last)
         {
-            assert(("pos isn't in this string", pos.base().current_ >= begin_()));
+            assert(("pos isn't in this string", pos.base().current_ >= begin_() && pos.base().current_ <= end_()));
 
             auto size = size_();
             auto start = pos.base().current_;
             auto end = end_();
             auto index = start - begin_();
-
-            if (start > end)
-                throw std::out_of_range{ exception_string_ };
 
             if constexpr (std::forward_iterator<InputIt>)
             {
@@ -1787,11 +1782,10 @@ namespace bizwen
         constexpr basic_string& insert(size_type pos, const StringViewLike& t, size_type t_index, size_type count = npos)
         {
             std::basic_string_view<CharT, Traits> sv = t;
-
             auto sv_size = sv.size();
             auto size = size_();
 
-            if (t_index > sv_size || pos > size)
+            if (t_index > sv_size)
                 throw std::out_of_range{ exception_string_ };
 
             count = std::min(npos, std::min(sv_size - t_index, count));
