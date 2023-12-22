@@ -1922,7 +1922,7 @@ namespace bizwen
                 temp.allocate_plus_one_(new_size);
                 auto temp_begin = temp.begin_();
                 auto temp_start = temp.begin_() + (first1 - begin);
-                
+
                 if BIZWEN_CONSTEVAL
                 {
                     std::copy(begin, first1, temp_begin);
@@ -2071,7 +2071,9 @@ namespace bizwen
             return *this;
         }
 
-        template <class InputIt> basic_string& replace(const_iterator first, const_iterator last, InputIt first2, InputIt last2)
+        template <class InputIt>
+        basic_string& replace(const_iterator first, const_iterator last, InputIt first2, InputIt last2)
+            requires std::input_iterator<InputIt>
         {
             basic_string temp{ first2, last2 };
             auto start = first.base().current_;
