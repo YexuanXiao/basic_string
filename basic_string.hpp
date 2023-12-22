@@ -728,9 +728,10 @@ namespace bizwen
             auto new_size = size + length;
             auto begin = begin_();
             auto end = begin + size;
+            auto start = begin + index;
 
             // if start is not in range and capacity > length + size
-            if (auto start = begin + index; (start < first || start > last) && capacity() > new_size)
+            if ((start < first || start > last) && capacity() > new_size)
             {
 
                 if BIZWEN_CONSTEVAL
@@ -1866,18 +1867,24 @@ namespace bizwen
         // ********************************* begin replace ******************************
 
     private:
-        constexpr void replace_(CharT* first1, CharT* last1, CharT const* first2, CharT const* last2)
+        constexpr void replace_(size_type pos, size_type count, CharT const* first2, CharT const* last2)
         {
+            auto size = size_();
+
+            if (pos > size)
+                throw std::out_of_range{ exception_string_ };
+
+            auto begin = begin_();
+            auto first1 = begin + pos;
+            auto last1 = begin + std::min(pos + count, size);
             auto length1 = last1 - first1;
             auto length2 = last2 - first2;
-            auto diff = length1 - length2;
-            auto size = size_();
             auto new_size = size + length1 - length2;
-            auto begin = begin_();
             auto end = begin + size;
 
             if (!(last1 < first2 || last2 < first1) && new_size <= capacity())
             {
+                auto diff = length1 - length2;
 
                 if BIZWEN_CONSTEVAL
                 {
@@ -1933,6 +1940,146 @@ namespace bizwen
             }
 
             resize_(new_size);
+        }
+
+    public:
+        constexpr basic_string& replace(size_type pos, size_type count, const basic_string& str)
+        {
+            replace_(pos, count, str.begin_(), str.end_());
+
+            return *pos;
+        }
+
+        constexpr basic_string& replace(const_iterator first, const_iterator last, const basic_string& str)
+        {
+            auto start = first.base().current_;
+            replace_(start - begin_(), last - first, str.begin_(), str.end_());
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(size_type pos, size_type count, const basic_string& str, size_type pos2, size_type count2 = npos)
+        {
+            auto str_size = str.size_();
+
+            if (pos2 > str_size)
+                throw std::out_of_range{ exception_string_ };
+
+            count2 = std::min(npos, std::min(count2, str_size - pos2));
+            auto begin = str.begin_();
+            replace_(pos, count, begin + count2, begin + count2 + pos2);
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(size_type pos, size_type count, const CharT* cstr, size_type count2)
+        {
+            replace_(pos, count, cstr, cstr + count2);
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(const_iterator first, const_iterator last, const CharT* cstr, size_type count2)
+        {
+            auto start = first.base().current_;
+            replace_(start - begin_(), last - first, cstr, cstr + count2);
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(size_type pos, size_type count, const CharT* cstr)
+        {
+            replace_(pos, count, cstr, cstr + c_style_string_length_(cstr));
+
+            return *pos;
+        }
+
+        constexpr basic_string& replace(const_iterator first, const_iterator last, const CharT* cstr)
+        {
+            auto start = first.base().current_;
+            replace_(start - begin_(), last - first, cstr, cstr + c_style_string_length_(cstr));
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(const_iterator first, const_iterator last, std::initializer_list<CharT> ilist)
+        {
+            auto data = std::data(ilist);
+            auto start = first.base().current_;
+            replace_(start - begin_(), last - first, data, data + ilist.size());
+
+            return *this;
+        }
+
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& replace(size_type pos, size_type count, const StringViewLike& t)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
+            auto data = sv.data();
+            replace_(pos, count, data, data + sv.size());
+
+            return *this;
+        }
+
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string& replace(const_iterator first, const_iterator last, const StringViewLike& t)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
+            auto sv_data = sv.data();
+            auto start = first.base().current_;
+            replace_(start - begin_(), last - first, sv_data, sv_data + sv.size());
+
+            return *this;
+        }
+
+        template <class StringViewLike>
+            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+        basic_string& replace(size_type pos, size_type count, const StringViewLike& t, size_type pos2, size_type count2 = npos)
+        {
+            std::basic_string_view<CharT, Traits> sv = t;
+            auto sv_size = sv.size();
+
+            if (pos2 > sv_size)
+                throw std::out_of_range{ exception_string_ };
+
+            count2 = std::min(npos, std::min(sv_size - pos2, count2));
+
+            auto data = sv.data();
+            replace_(pos, count, data + pos2, data + pos2 + count2);
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(size_type pos, size_type count, size_type count2, CharT ch)
+        {
+            basic_string temp{ count2, ch };
+            auto begin = begin_();
+            replace_(pos, count, begin, begin + count2);
+
+            return *this;
+        }
+
+        constexpr basic_string& replace(const_iterator first, const_iterator last, size_type count2, CharT ch)
+        {
+            basic_string temp{ count2, ch };
+            auto begin = begin_();
+            auto start = first.base().current_;
+            replace_(start - begin_(), last - first, begin, begin + count2);
+
+            return *this;
+        }
+
+        template <class InputIt> basic_string& replace(const_iterator first, const_iterator last, InputIt first2, InputIt last2)
+        {
+            basic_string temp{ first2, last2 };
+            auto start = first.base().current_;
+            auto begin = temp.begin_();
+            auto size = temp.size_();
+            replace_(start - begin_(), last - first, begin, begin + size);
+
+            return *this;
         }
     };
 
