@@ -763,29 +763,29 @@ namespace bizwen
             }
             else
             {
-                basic_string temp{ std::move(*this) };
-                allocate_plus_one_(new_size);
-                begin = begin_();
-                start = begin + index;
+                basic_string temp{};
+                temp.allocate_plus_one_(new_size);
                 auto temp_begin = temp.begin_();
                 auto temp_start = temp_begin + index;
                 auto temp_end = temp_begin + size;
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy(temp_begin, temp_start, begin);
-                    std::copy(first, last, start);
-                    std::copy(temp_start, temp_end, start + length);
+                    std::copy(begin, start, temp_begin);
+                    std::copy(first, last, temp_start);
+                    std::copy(start, end, temp_start + length);
                 }
                 else
                 {
-                    std::memcpy(begin, start, sizeof(CharT) * index);
-                    std::memcpy(start, first, length * sizeof(CharT));
-                    std::memcpy(start + length, temp_start, (size - index) * sizeof(CharT));
+                    std::memcpy(start, begin, sizeof(CharT) * index);
+                    std::memcpy(temp_start, first, length * sizeof(CharT));
+                    std::memcpy(temp_start + length, start, (size - index) * sizeof(CharT));
                 }
+
+                temp.swap(*this);
             }
 
-            resize_(size + length);
+            resize_(new_size);
         }
 
     public:
