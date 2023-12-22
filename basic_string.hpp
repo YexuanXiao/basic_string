@@ -708,27 +708,66 @@ namespace bizwen
          */
         constexpr void insert_(size_type index, CharT const* first, CharT const* last)
         {
-            assert(("can't self insert", first > end_() || last < begin_()));
-
             auto size = size_();
 
             if (index > size)
                 throw std::out_of_range{ exception_string_ };
 
             auto length = last - first;
-            reserve(size + length);
-            auto begin = begin_();
-            auto end = begin + size;
+            auto new_size = size + length;
 
-            if BIZWEN_CONSTEVAL
+            // if start is not in range and capacity > length + size
+            if (auto begin = begin_(), start = begin + index; (start < first || start > last) && capacity() > new_size)
             {
-                std::copy_backward(begin + index, end, end + length);
-                std::copy(first, last, begin + index);
+                auto end = begin + size;
+
+                if BIZWEN_CONSTEVAL
+                {
+                    std::copy_backward(begin + index, end, end + length);
+                }
+                else
+                {
+                    std::memmove(end, begin + index, length * sizeof(CharT));
+                }
+
+                // re-cacl first and last, because range is in *this 
+                if (first >= begin && last <= end)
+                {
+                    first += index;
+                    last += index;
+                }
+
+                if BIZWEN_CONSTEVAL
+                {
+                    std::copy(first, last, start);
+                }
+                else
+                {
+                    std::memcpy(start, first, length * sizeof(CharT));
+                }
             }
             else
             {
-                std::memmove(end, begin + index, length * sizeof(CharT));
-                std::memcpy(begin + index, first, (last - first) * sizeof(CharT));
+                basic_string temp{ std::move(*this) };
+                allocate_plus_one_(new_size);
+                begin = begin_();
+                start = begin + index;
+                auto temp_begin = temp.begin_();
+                auto temp_start = temp_begin + index;
+                auto temp_end = temp_begin + size;
+
+                if BIZWEN_CONSTEVAL
+                {
+                    std::copy(temp_begin, temp_start, begin);
+                    std::copy(first, last, start);
+                    std::copy(temp_start, temp_end, start + length);
+                }
+                else
+                {
+                    std::memcpy(begin, start, sizeof(CharT) * index);
+                    std::memcpy(start, first, length * sizeof(CharT));
+                    std::memcpy(start + length, temp_start, (size - index) * sizeof(CharT));
+                }
             }
 
             resize_(size + length);
