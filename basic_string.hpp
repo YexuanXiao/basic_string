@@ -2075,18 +2075,28 @@ namespace bizwen
         basic_string& replace(const_iterator first, const_iterator last, InputIt first2, InputIt last2)
             requires std::input_iterator<InputIt>
         {
-            basic_string temp{ first2, last2 };
             auto start = first.base().current_;
-            auto begin = temp.begin_();
-            auto size = temp.size_();
-            replace_(start - begin_(), last - first, begin, begin + size);
+
+            if constexpr (std::random_access_iterator<InputIt>)
+            {
+                auto data = std::addressof(*first2);
+                auto length2 = std::distance(first2, last2);
+                replace_(start - begin_(), last - first, data, data + length2);
+            }
+            else
+            {
+                basic_string temp{ first2, last2 };
+                auto begin = temp.begin_();
+                auto size = temp.size_();
+                replace_(start - begin_(), last - first, begin, begin + size);
+            }
 
             return *this;
         }
     };
 
-    static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(int*) * 4);
-    static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(int*) * 4);
-    static_assert(sizeof(bizwen::basic_string<char32_t>) == sizeof(int*) * 4);
+    static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(char8_t*) * 4);
+    static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(char16_t*) * 4);
+    static_assert(sizeof(bizwen::basic_string<char32_t>) == sizeof(char32_t*) * 4);
     // clang-format on
 }
