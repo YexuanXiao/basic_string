@@ -354,6 +354,7 @@ namespace bizwen
             using iterator_category = std::random_access_iterator_tag;
             using iterator_concept = std::contiguous_iterator_tag;
 
+        private:
             CharT* current_{};
 
 #ifndef NDEBUG
@@ -372,12 +373,14 @@ namespace bizwen
 
             friend class basic_string;
 
+        public:
             iterator_type_() noexcept = default;
             iterator_type_(iterator_type_ const&) noexcept = default;
             iterator_type_(iterator_type_&&) noexcept = default;
             iterator_type_& operator=(iterator_type_ const&) & noexcept = default;
             iterator_type_& operator=(iterator_type_&&) & noexcept = default;
 
+        private:
 #ifndef NDEBUG
             constexpr iterator_type_(CharT* current, basic_string* target) : current_(current), target_(target)
             {
@@ -388,6 +391,7 @@ namespace bizwen
             }
 #endif
 
+        public:
             constexpr iterator_type_ operator+(difference_type n) const& noexcept
             {
                 auto temp = *this;
@@ -2095,8 +2099,16 @@ namespace bizwen
         }
     };
 
-    static_assert(sizeof(bizwen::basic_string<char8_t>) == sizeof(char8_t*) * 4);
-    static_assert(sizeof(bizwen::basic_string<char16_t>) == sizeof(char16_t*) * 4);
-    static_assert(sizeof(bizwen::basic_string<char32_t>) == sizeof(char32_t*) * 4);
-    // clang-format on
+    using string = bizwen::basic_string<char8_t>;
+    using wstring = bizwen::basic_string<wchar_t>;
+    using u8string = bizwen::basic_string<char8_t>;
+    using u16string = bizwen::basic_string<char16_t>;
+    using u32string = bizwen::basic_string<char32_t>;
+
+    static_assert(sizeof(string) == sizeof(char8_t*) * 4);
+    static_assert(sizeof(wstring) == sizeof(char8_t*) * 4);
+    static_assert(sizeof(u8string) == sizeof(char8_t*) * 4);
+    static_assert(sizeof(u16string) == sizeof(char8_t*) * 4);
+    static_assert(sizeof(u32string) == sizeof(char8_t*) * 4);
+    static_assert(std::contiguous_iterator<string::iterator>);
 }
