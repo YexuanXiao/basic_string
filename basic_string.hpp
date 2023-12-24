@@ -258,18 +258,23 @@ namespace bizwen
          * @brief internal use
          * @return a pointer to the next position of the last element
          */
-        constexpr CharT* end_() noexcept
+        constexpr CharT const* end_() const noexcept
         {
-            return begin_() + size_();
-        }
+            assert(("string is null", !is_null_()));
 
+            if (is_long_())
+                return stor_.ls_.end_;
+            else
+                return stor_.ss_.data() + size_flag_;
+        }
+        
         /**
          * @brief internal use
          * @return a pointer to the next position of the last element
          */
-        constexpr CharT const* end_() const noexcept
+        constexpr CharT* end_() noexcept
         {
-            return begin_() + size_();
+            return const_cast<CharT*>(const_cast<basic_string const&>(*this).end_());
         }
 
     public:
