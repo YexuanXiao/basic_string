@@ -2086,7 +2086,7 @@ namespace bizwen
         {
             auto start = first.base().current_;
 
-            if constexpr (std::random_access_iterator<InputIt>)
+            if constexpr (std::contiguous_iterator<InputIt>)
             {
                 auto data = std::addressof(*first2);
                 auto length2 = std::distance(first2, last2);
