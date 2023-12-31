@@ -13,12 +13,12 @@
 #if defined(__cpp_if_consteval) && (__cpp_if_consteval >= 202106L)
 #define BIZWEN_CONSTEVAL consteval
 #else
-#define BIZWEN_CONSTEVAL constexpr(std::is_constant_evaluated())
+#define BIZWEN_CONSTEVAL constexpr(::std::is_constant_evaluated())
 #endif
 
 namespace bizwen
 {
-    template <typename T> struct is_character: std::bool_constant<std::is_same_v<char, std::remove_cv_t<T>> || std::is_same_v<signed char, std::remove_cv_t<T>> || std::is_same_v<unsigned char, std::remove_cv_t<T>> || std::is_same_v<wchar_t, std::remove_cv_t<T>> || std::is_same_v<char8_t, std::remove_cv_t<T>> || std::is_same_v<char16_t, std::remove_cv_t<T>> || std::is_same_v<char32_t, std::remove_cv_t<T>>>
+    template <typename T> struct is_character: ::std::bool_constant<::std::is_same_v<char, ::std::remove_cv_t<T>> || ::std::is_same_v<signed char, ::std::remove_cv_t<T>> || ::std::is_same_v<unsigned char, ::std::remove_cv_t<T>> || ::std::is_same_v<wchar_t, ::std::remove_cv_t<T>> || ::std::is_same_v<char8_t, ::std::remove_cv_t<T>> || ::std::is_same_v<char16_t, ::std::remove_cv_t<T>> || ::std::is_same_v<char32_t, ::std::remove_cv_t<T>>>
     {
     };
 
@@ -27,7 +27,7 @@ namespace bizwen
     template <typename T>
     concept character = is_character_v<T>;
 
-    template <character CharT, class Traits = std::char_traits<CharT>, class Allocator = std::allocator<CharT>> class alignas(alignof(int*)) basic_string
+    template <character CharT, class Traits = ::std::char_traits<CharT>, class Allocator = ::std::allocator<CharT>> class alignas(alignof(int*)) basic_string
     {
     private:
         /*
@@ -51,7 +51,7 @@ namespace bizwen
         /**
          * @brief short_string_max_ is the max length of short string
          */
-        static inline constexpr std::size_t short_string_max_{ sizeof(CharT*) * 4 / sizeof(CharT) - 2 };
+        static inline constexpr ::std::size_t short_string_max_{ sizeof(CharT*) * 4 / sizeof(CharT) - 2 };
 
         /**
          * @brief union storage long string and short string
@@ -59,7 +59,7 @@ namespace bizwen
 #pragma pack(1)
 
         union storage_type_ {
-            std::array<CharT, short_string_max_ + 1> ss_;
+            ::std::array<CharT, short_string_max_ + 1> ss_;
             ls_type_ ls_;
         };
 
@@ -83,9 +83,9 @@ namespace bizwen
          * @brief flag = -1: long string, length of string is end - begin
          * @brief flag = -2: null string
          */
-        typename std::make_signed_t<CharT> size_flag_{};
+        typename ::std::make_signed_t<CharT> size_flag_{};
 
-        using atraits_t_ = std::allocator_traits<Allocator>;
+        using atraits_t_ = ::std::allocator_traits<Allocator>;
 
         static inline char exception_string_[] = "parameter is out of range, please check it.";
 
@@ -115,7 +115,7 @@ namespace bizwen
             return size_flag_ == -2;
         }
 
-        constexpr std::size_t size_() const noexcept
+        constexpr ::std::size_t size_() const noexcept
         {
             assert(("string is null", !is_null_()));
 
@@ -135,12 +135,12 @@ namespace bizwen
         using traits_type = Traits;
         using value_type = CharT;
         using allocator_type = Allocator;
-        using size_type = std::allocator_traits<Allocator>::size_type;
-        using difference_type = std::allocator_traits<Allocator>::difference_type;
+        using size_type = ::std::allocator_traits<Allocator>::size_type;
+        using difference_type = ::std::allocator_traits<Allocator>::difference_type;
         using reference = value_type&;
         using const_reference = value_type const&;
-        using pointer = std::allocator_traits<Allocator>::pointer;
-        using const_pointer = std::allocator_traits<Allocator>::const_pointer;
+        using pointer = ::std::allocator_traits<Allocator>::pointer;
+        using const_pointer = ::std::allocator_traits<Allocator>::const_pointer;
 
         static inline constexpr size_type npos = -1;
 
@@ -173,12 +173,12 @@ namespace bizwen
             return is_empty_();
         }
 
-        constexpr std::size_t size() const noexcept
+        constexpr ::std::size_t size() const noexcept
         {
             return size_();
         }
 
-        constexpr std::size_t length() const noexcept
+        constexpr ::std::size_t length() const noexcept
         {
             return size_();
         }
@@ -217,11 +217,11 @@ namespace bizwen
                 if BIZWEN_CONSTEVAL
                 {
                     stor_.ss_ = decltype(stor_.ss_){};
-                    std::copy(ls.begin_, ls.end_, stor_.ss_.data());
+                    ::std::copy(ls.begin_, ls.end_, stor_.ss_.data());
                 }
                 else
                 {
-                    std::memcpy(stor_.ss_.data(), ls.begin_, (ls.end_ - ls.begin_) * sizeof(CharT));
+                    ::std::memcpy(stor_.ss_.data(), ls.begin_, (ls.end_ - ls.begin_) * sizeof(CharT));
                 }
 
                 dealloc_(ls);
@@ -296,7 +296,7 @@ namespace bizwen
         constexpr const_reference at(size_type pos) const
         {
             if (pos >= size_())
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
             return *(begin_() + pos);
         }
@@ -342,9 +342,9 @@ namespace bizwen
             return const_cast<CharT&>(const_cast<basic_string const&>(*this).back());
         }
 
-        constexpr operator std::basic_string_view<CharT, Traits>() const noexcept
+        constexpr operator ::std::basic_string_view<CharT, Traits>() const noexcept
         {
-            return std::basic_string_view<CharT, Traits>(begin_(), end_());
+            return ::std::basic_string_view<CharT, Traits>(begin_(), end_());
         }
 
         // ********************************* begin iterator type ******************************
@@ -352,12 +352,12 @@ namespace bizwen
     private:
         struct iterator_type_
         {
-            using difference_type = std::ptrdiff_t;
+            using difference_type = ::std::ptrdiff_t;
             using value_type = CharT;
-            using pointer = std::add_pointer_t<value_type>;
-            using reference = std::add_lvalue_reference_t<CharT>;
-            using iterator_category = std::random_access_iterator_tag;
-            using iterator_concept = std::contiguous_iterator_tag;
+            using pointer = ::std::add_pointer_t<value_type>;
+            using reference = ::std::add_lvalue_reference_t<CharT>;
+            using iterator_category = ::std::random_access_iterator_tag;
+            using iterator_concept = ::std::contiguous_iterator_tag;
 
         private:
             CharT* current_{};
@@ -502,16 +502,16 @@ namespace bizwen
                 return current_;
             }
 
-            friend constexpr std::strong_ordering operator<=>(iterator_type_ const&, iterator_type_ const&) noexcept = default;
+            friend constexpr ::std::strong_ordering operator<=>(iterator_type_ const&, iterator_type_ const&) noexcept = default;
         };
 
         // ********************************* begin iterator function ******************************
 
     public:
         using iterator = iterator_type_;
-        using const_iterator = std::basic_const_iterator<iterator_type_>;
-        using reverse_iterator = std::reverse_iterator<iterator>;
-        using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+        using const_iterator = ::std::basic_const_iterator<iterator_type_>;
+        using reverse_iterator = ::std::reverse_iterator<iterator>;
+        using const_reverse_iterator = ::std::reverse_iterator<const_iterator>;
 
         constexpr iterator begin() noexcept
         {
@@ -652,11 +652,11 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                std::copy(begin, end, begin_());
+                ::std::copy(begin, end, begin_());
             }
             else
             {
-                std::memcpy(begin_(), begin, (end - begin) * sizeof(CharT));
+                ::std::memcpy(begin_(), begin, (end - begin) * sizeof(CharT));
             }
         }
 
@@ -670,16 +670,16 @@ namespace bizwen
 #if defined(__cpp_if_consteval) && (__cpp_if_consteval >= 202106L)
             if !consteval
 #else
-            if constexpr (!std::is_constant_evaluated())
+            if constexpr (!::std::is_constant_evaluated())
 #endif
             {
-                if constexpr (std::is_same_v<char, CharT>)
+                if constexpr (::std::is_same_v<char, CharT>)
                 {
-                    return std::strlen(begin);
+                    return ::std::strlen(begin);
                 }
-                else if (std::is_same_v<wchar_t, CharT>)
+                else if (::std::is_same_v<wchar_t, CharT>)
                 {
-                    return std::wcslen(begin);
+                    return ::std::wcslen(begin);
                 }
             }
 
@@ -731,7 +731,7 @@ namespace bizwen
             auto size = size_();
 
             if (index > size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
             auto length = last - first;
             auto new_size = size + length;
@@ -745,11 +745,11 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy_backward(begin + index, end, end + length);
+                    ::std::copy_backward(begin + index, end, end + length);
                 }
                 else
                 {
-                    std::memmove(end, begin + index, length * sizeof(CharT));
+                    ::std::memmove(end, begin + index, length * sizeof(CharT));
                 }
 
                 // re-cacl first and last, because range is in *this
@@ -761,11 +761,11 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy(first, last, start);
+                    ::std::copy(first, last, start);
                 }
                 else
                 {
-                    std::memcpy(start, first, length * sizeof(CharT));
+                    ::std::memcpy(start, first, length * sizeof(CharT));
                 }
             }
             else
@@ -778,15 +778,15 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy(begin, start, temp_begin);
-                    std::copy(first, last, temp_start);
-                    std::copy(start, end, temp_start + length);
+                    ::std::copy(begin, start, temp_begin);
+                    ::std::copy(first, last, temp_start);
+                    ::std::copy(start, end, temp_start + length);
                 }
                 else
                 {
-                    std::memcpy(start, begin, index * sizeof(CharT));
-                    std::memcpy(temp_start, first, length * sizeof(CharT));
-                    std::memcpy(temp_start + length, start, (end - start) * sizeof(CharT));
+                    ::std::memcpy(start, begin, index * sizeof(CharT));
+                    ::std::memcpy(temp_start, first, length * sizeof(CharT));
+                    ::std::memcpy(temp_start + length, start, (end - start) * sizeof(CharT));
                 }
 
                 temp.swap(*this);
@@ -851,7 +851,7 @@ namespace bizwen
             {
                 reserve(count);
                 auto begin = begin_();
-                std::fill(begin + size, begin + count, ch);
+                ::std::fill(begin + size, begin + count, ch);
             }
 
             resize_(count);
@@ -898,9 +898,9 @@ namespace bizwen
         {
             assert(("string is null", !is_null_()));
             auto&& self = *this;
-            std::ranges::swap(self.allocator_, other.allocator_);
-            std::ranges::swap(self.stor_, other.stor_);
-            std::ranges::swap(self.size_flag_, other.size_flag_);
+            ::std::ranges::swap(self.allocator_, other.allocator_);
+            ::std::ranges::swap(self.stor_, other.stor_);
+            ::std::ranges::swap(self.size_flag_, other.size_flag_);
         }
 
         friend void swap(basic_string& self, basic_string& other) noexcept
@@ -922,7 +922,7 @@ namespace bizwen
             allocate_plus_one_(n);
             auto begin = begin_();
             auto end = begin + n;
-            std::fill(begin, end, ch);
+            ::std::fill(begin, end, ch);
             resize_(n);
         }
 
@@ -931,9 +931,9 @@ namespace bizwen
             auto other_size = other.size_();
 
             if (pos > other_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(other_size - pos, count);
+            count = ::std::min(other_size - pos, count);
             allocate_plus_one_(count);
             auto start = other.begin_() + pos;
             fill_(start, start + count);
@@ -949,9 +949,9 @@ namespace bizwen
             auto other_size = other.size_();
 
             if (pos > other_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(other_size - pos, count);
+            count = ::std::min(other_size - pos, count);
 
             if (pos != 0)
             {
@@ -961,11 +961,11 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy(start, last, other_begin);
+                    ::std::copy(start, last, other_begin);
                 }
                 else
                 {
-                    std::memcpy(other_begin, start, (last - start) * sizeof(CharT));
+                    ::std::memcpy(other_begin, start, (last - start) * sizeof(CharT));
                 }
             }
 
@@ -973,7 +973,7 @@ namespace bizwen
             other.swap(*this);
         }
 
-        constexpr basic_string(basic_string&& other, size_type pos) : basic_string(std::move(other), pos, other.size_() - pos)
+        constexpr basic_string(basic_string&& other, size_type pos) : basic_string(::std::move(other), pos, other.size_() - pos)
         {
         }
 
@@ -989,14 +989,14 @@ namespace bizwen
         }
 
         template <class InputIt>
-            requires std::input_iterator<InputIt>
+            requires ::std::input_iterator<InputIt>
         constexpr basic_string(InputIt first, InputIt last)
         {
-            if constexpr (std::forward_iterator<InputIt>)
+            if constexpr (::std::forward_iterator<InputIt>)
             {
-                auto length = std::ranges::distance(first, last);
+                auto length = ::std::ranges::distance(first, last);
                 allocate_plus_one_(length);
-                std::ranges::copy(first, last, begin_());
+                ::std::ranges::copy(first, last, begin_());
                 resize_(length);
             }
             else
@@ -1019,31 +1019,31 @@ namespace bizwen
             other.swap(*this);
         }
 
-        constexpr basic_string(std::initializer_list<CharT> ilist) : basic_string(std::data(ilist), ilist.size())
+        constexpr basic_string(::std::initializer_list<CharT> ilist) : basic_string(::std::data(ilist), ilist.size())
         {
         }
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
-        constexpr basic_string(const StringViewLike& t) : basic_string(std::basic_string_view<CharT, Traits>{ t }.data(), std::basic_string_view<CharT, Traits>{ t }.size())
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
+        constexpr basic_string(const StringViewLike& t) : basic_string(::std::basic_string_view<CharT, Traits>{ t }.data(), ::std::basic_string_view<CharT, Traits>{ t }.size())
         {
         }
 
         // clang-format on
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>>
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>>
         constexpr basic_string(const StringViewLike& t, size_type pos, size_type n)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto data = sv.data();
             auto sv_size = sv.size();
 
             if (pos > sv_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            n = std::min(sv_size - pos, n);
+            n = ::std::min(sv_size - pos, n);
             allocate_plus_one_(n);
             fill_(data, data + n);
             resize_(n);
@@ -1052,22 +1052,22 @@ namespace bizwen
 #if defined(__cpp_lib_containers_ranges) && (__cpp_lib_containers_ranges >= 202202L)
         // tagged constructors to construct from container compatible range
         template <class R>
-            requires std::ranges::range<R> && requires {
+            requires ::std::ranges::range<R> && requires {
                 typename R::value_type;
-                requires std::same_as<typename R::value_type, CharT>;
+                requires ::std::same_as<typename R::value_type, CharT>;
             }
-        constexpr basic_string(std::from_range_t, R&& rg)
+        constexpr basic_string(::std::from_range_t, R&& rg)
         {
-            if constexpr (std::ranges::sized_range<R>)
+            if constexpr (::std::ranges::sized_range<R>)
             {
-                auto size = std::ranges::size(rg);
+                auto size = ::std::ranges::size(rg);
                 allocate_plus_one_(size);
-                std::ranges::copy(std::ranges::begin(rg), std::ranges::end(rg), begin_());
+                ::std::ranges::copy(::std::ranges::begin(rg), ::std::ranges::end(rg), begin_());
                 resize_(size);
             }
             else
             {
-                for (auto first = std::ranges::begin(rg), last = std::ranges::end(rg); first != last; ++first)
+                for (auto first = ::std::ranges::begin(rg), last = ::std::ranges::end(rg); first != last; ++first)
                     push_back(*first);
             }
         }
@@ -1079,16 +1079,16 @@ namespace bizwen
          * @brief this version provide for InputIt version of assign, other version of append and operator+=
          */
         template <class InputIt>
-            requires std::input_iterator<InputIt>
+            requires ::std::input_iterator<InputIt>
         constexpr basic_string& append(InputIt first, InputIt last)
         {
-            if constexpr (std::forward_iterator<InputIt>)
+            if constexpr (::std::forward_iterator<InputIt>)
             {
                 auto size = size_();
-                auto length = std::ranges::distance(first, last);
+                auto length = ::std::ranges::distance(first, last);
                 auto new_size = size + length;
-                reserve(std::max(size * 2, new_size));
-                std::ranges::copy(first, last, begin_() + size);
+                reserve(::std::max(size * 2, new_size));
+                ::std::ranges::copy(first, last, begin_() + size);
                 resize_(new_size);
             }
             else
@@ -1107,7 +1107,7 @@ namespace bizwen
             reserve(count);
             auto begin = begin_();
             auto end = begin + count;
-            std::fill(begin, end, ch);
+            ::std::fill(begin, end, ch);
             resize_(count);
 
             return *this;
@@ -1125,9 +1125,9 @@ namespace bizwen
             auto str_size = str.size_();
 
             if (pos > str_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(str_size - pos, count));
+            count = ::std::min(npos, ::std::min(str_size - pos, count));
             auto str_begin = begin_();
             assign_(str_begin + pos, str_begin + pos + count);
 
@@ -1156,7 +1156,7 @@ namespace bizwen
         }
 
         template <class InputIt>
-            requires std::input_iterator<InputIt>
+            requires ::std::input_iterator<InputIt>
         constexpr basic_string& assign(InputIt first, InputIt last)
         {
             resize_(0);
@@ -1164,9 +1164,9 @@ namespace bizwen
             return append(first, last);
         }
 
-        constexpr basic_string& assign(std::initializer_list<CharT> ilist)
+        constexpr basic_string& assign(::std::initializer_list<CharT> ilist)
         {
-            auto data = std::data(ilist);
+            auto data = ::std::data(ilist);
             assign_(data, data + ilist.size());
 
             return *this;
@@ -1174,10 +1174,10 @@ namespace bizwen
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         basic_string& assign(const StringViewLike& t)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto data = sv.data();
             assign_(data, data + sv.size());
 
@@ -1185,16 +1185,16 @@ namespace bizwen
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& assign(const StringViewLike& t, size_type pos, size_type count = npos)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto sv_size = sv.size();
 
             if (pos > sv_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(sv_size - pos, count));
+            count = ::std::min(npos, ::std::min(sv_size - pos, count));
             auto data = sv.data();
             assign_(data + pos, data + pos + count);
 
@@ -1205,8 +1205,8 @@ namespace bizwen
 
         // ********************************* begin operator= ******************************
 
-        basic_string(std::nullptr_t) = delete;
-        constexpr basic_string& operator=(std::nullptr_t) = delete;
+        basic_string(::std::nullptr_t) = delete;
+        constexpr basic_string& operator=(::std::nullptr_t) = delete;
 
         constexpr basic_string& operator=(basic_string&& other) noexcept
         {
@@ -1231,14 +1231,14 @@ namespace bizwen
             return *this;
         }
 
-        constexpr basic_string& operator=(std::initializer_list<CharT> ilist)
+        constexpr basic_string& operator=(::std::initializer_list<CharT> ilist)
         {
             return assign(ilist);
         }
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& operator=(const StringViewLike& t)
         {
             return assign(t);
@@ -1248,41 +1248,41 @@ namespace bizwen
 
         // ********************************* begin compare ******************************
 
-        friend constexpr std::strong_ordering operator<=>(basic_string const& lhs, basic_string const& rhs) noexcept
+        friend constexpr ::std::strong_ordering operator<=>(basic_string const& lhs, basic_string const& rhs) noexcept
         {
             auto lsize = lhs.size_();
             auto rsize = rhs.size_();
 
             if BIZWEN_CONSTEVAL
             {
-                for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize), start = rhs.begin_(); begin != end; ++begin, ++start)
+                for (auto begin = lhs.begin_(), end = begin + ::std::min(lsize, rsize), start = rhs.begin_(); begin != end; ++begin, ++start)
                 {
                     if (*begin > *start)
-                        return std::strong_ordering::greater;
+                        return ::std::strong_ordering::greater;
                     else if (*begin < *start)
-                        return std::strong_ordering::less;
+                        return ::std::strong_ordering::less;
                 }
 
                 if (lsize > rsize)
-                    return std::strong_ordering::greater;
+                    return ::std::strong_ordering::greater;
                 else if (lsize < rsize)
-                    return std::strong_ordering::less;
+                    return ::std::strong_ordering::less;
 
-                return std::strong_ordering::equal;
+                return ::std::strong_ordering::equal;
             }
             else
             {
-                auto res = basic_string::traits_type::compare(lhs.begin_(), rhs.begin(), std::min(rsize, lsize));
+                auto res = basic_string::traits_type::compare(lhs.begin_(), rhs.begin(), ::std::min(rsize, lsize));
                 if (res > 0)
-                    return std::strong_ordering::greater;
+                    return ::std::strong_ordering::greater;
                 else if (res < 0)
-                    return std::strong_ordering::less;
+                    return ::std::strong_ordering::less;
                 else
-                    return std::strong_ordering::equal;
+                    return ::std::strong_ordering::equal;
             }
         }
 
-        friend constexpr std::strong_ordering operator<=>(basic_string const& lhs, CharT const* rhs) noexcept
+        friend constexpr ::std::strong_ordering operator<=>(basic_string const& lhs, CharT const* rhs) noexcept
         {
             auto start = rhs;
             auto rsize = basic_string::c_style_string_length_(start);
@@ -1290,30 +1290,30 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize); begin != end; ++begin, ++start)
+                for (auto begin = lhs.begin_(), end = begin + ::std::min(lsize, rsize); begin != end; ++begin, ++start)
                 {
                     if (*begin > *start)
-                        return std::strong_ordering::greater;
+                        return ::std::strong_ordering::greater;
                     else if (*begin < *start)
-                        return std::strong_ordering::less;
+                        return ::std::strong_ordering::less;
                 }
 
                 if (lsize > rsize)
-                    return std::strong_ordering::greater;
+                    return ::std::strong_ordering::greater;
                 else if (lsize < rsize)
-                    return std::strong_ordering::less;
+                    return ::std::strong_ordering::less;
                 else
-                    return std::strong_ordering::equal;
+                    return ::std::strong_ordering::equal;
             }
             else
             {
-                auto res = basic_string::traits_type::compare(lhs.begin_(), start, std::min(rsize, lsize));
+                auto res = basic_string::traits_type::compare(lhs.begin_(), start, ::std::min(rsize, lsize));
                 if (res > 0)
-                    return std::strong_ordering::greater;
+                    return ::std::strong_ordering::greater;
                 else if (res < 0)
-                    return std::strong_ordering::less;
+                    return ::std::strong_ordering::less;
                 else
-                    return std::strong_ordering::equal;
+                    return ::std::strong_ordering::equal;
             }
         }
 
@@ -1327,7 +1327,7 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize), start = rhs.begin_(); begin != end; ++begin, ++start)
+                for (auto begin = lhs.begin_(), end = begin + ::std::min(lsize, rsize), start = rhs.begin_(); begin != end; ++begin, ++start)
                 {
                     if (*begin != *start)
                         return false;
@@ -1337,7 +1337,7 @@ namespace bizwen
             }
             else
             {
-                return basic_string::traits_type::compare(lhs.begin_(), rhs.begin(), std::min(rsize, lsize));
+                return basic_string::traits_type::compare(lhs.begin_(), rhs.begin(), ::std::min(rsize, lsize));
             }
         }
 
@@ -1352,7 +1352,7 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                for (auto begin = lhs.begin_(), end = begin + std::min(lsize, rsize); begin != end; ++begin, ++start)
+                for (auto begin = lhs.begin_(), end = begin + ::std::min(lsize, rsize); begin != end; ++begin, ++start)
                 {
                     if (*begin != *start)
                         return false;
@@ -1362,7 +1362,7 @@ namespace bizwen
             }
             else
             {
-                return basic_string::traits_type::compare(lhs.begin_(), start, std::min(rsize, lsize));
+                return basic_string::traits_type::compare(lhs.begin_(), start, ::std::min(rsize, lsize));
             }
         }
 
@@ -1378,11 +1378,11 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                std::copy(first, last, end);
+                ::std::copy(first, last, end);
             }
             else
             {
-                std::memcpy(end, first, (last - first) * sizeof(CharT));
+                ::std::memcpy(end, first, (last - first) * sizeof(CharT));
             }
 
             resize_(size + length);
@@ -1394,7 +1394,7 @@ namespace bizwen
             auto size = size_();
             reserve(size + count);
             auto end = begin_() + size;
-            std::fill(end, end + count, ch);
+            ::std::fill(end, end + count, ch);
             resize_(size + count);
 
             return *this;
@@ -1420,9 +1420,9 @@ namespace bizwen
             auto str_size = str.size_();
 
             if (pos > str_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(str_size - pos, count));
+            count = ::std::min(npos, ::std::min(str_size - pos, count));
 
             return append(str.begin_() + pos, count);
         }
@@ -1434,9 +1434,9 @@ namespace bizwen
             return *this;
         }
 
-        constexpr basic_string& append(std::initializer_list<CharT> ilist)
+        constexpr basic_string& append(::std::initializer_list<CharT> ilist)
         {
-            auto data = std::data(ilist);
+            auto data = ::std::data(ilist);
             append_(data, data + ilist.size());
 
             return *this;
@@ -1444,10 +1444,10 @@ namespace bizwen
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& append(const StringViewLike& t)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto data = sv.data();
             append_(data, data + sv.size());
 
@@ -1455,16 +1455,16 @@ namespace bizwen
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& append(const StringViewLike& t, size_type pos, size_type count = npos)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto sv_size = sv.size();
 
             if (pos > sv_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(sv_size - count, count));
+            count = ::std::min(npos, ::std::min(sv_size - count, count));
 
             return append(sv.data() + pos, count);
         }
@@ -1475,7 +1475,7 @@ namespace bizwen
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& operator+=(const StringViewLike& t)
         {
             return append(t);
@@ -1498,7 +1498,7 @@ namespace bizwen
             return append(s);
         }
 
-        constexpr basic_string& operator+=(std::initializer_list<CharT> ilist)
+        constexpr basic_string& operator+=(::std::initializer_list<CharT> ilist)
         {
             return append(ilist);
         }
@@ -1523,7 +1523,7 @@ namespace bizwen
         }
 
     public:
-        constexpr bool starts_with(std::basic_string_view<CharT, Traits> sv) const noexcept
+        constexpr bool starts_with(::std::basic_string_view<CharT, Traits> sv) const noexcept
         {
             auto sv_size = sv.size();
             auto data = sv.data();
@@ -1551,7 +1551,7 @@ namespace bizwen
             return equal_(s, s + length, begin, begin + length);
         }
 
-        constexpr bool ends_with(std::basic_string_view<CharT, Traits> sv) const noexcept
+        constexpr bool ends_with(::std::basic_string_view<CharT, Traits> sv) const noexcept
         {
             auto sv_size = sv.size();
             auto sv_data = sv.data();
@@ -1581,7 +1581,7 @@ namespace bizwen
         }
 
 #if defined(__cpp_lib_string_contains) && (__cpp_lib_string_contains >= 202011L)
-        constexpr bool contains(std::basic_string_view<CharT, Traits> sv) const noexcept
+        constexpr bool contains(::std::basic_string_view<CharT, Traits> sv) const noexcept
         {
             auto size = sv.size();
             auto begin = begin_();
@@ -1594,7 +1594,7 @@ namespace bizwen
             if (equal_(begin, begin + size, data, data + size))
                 return true;
 
-            return std::basic_string_view<CharT, Traits>{ begin + 1, begin + size }.contains(sv);
+            return ::std::basic_string_view<CharT, Traits>{ begin + 1, begin + size }.contains(sv);
         }
 
         constexpr bool contains(CharT ch) const noexcept
@@ -1610,7 +1610,7 @@ namespace bizwen
 
         constexpr bool contains(const CharT* s) const noexcept
         {
-            return std::basic_string_view<CharT, Traits>{ begin_(), end_() }.contains(std::basic_string_view<CharT, Traits>{ s, s + c_style_string_length_(s) });
+            return ::std::basic_string_view<CharT, Traits>{ begin_(), end_() }.contains(::std::basic_string_view<CharT, Traits>{ s, s + c_style_string_length_(s) });
         }
 #endif
 
@@ -1621,7 +1621,7 @@ namespace bizwen
             auto size = size_();
 
             if (index > size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
             reserve(size + count);
             auto start = begin_() + index;
@@ -1630,13 +1630,13 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                std::copy_backward(start, end, last);
-                std::fill(start, start + count, ch);
+                ::std::copy_backward(start, end, last);
+                ::std::fill(start, start + count, ch);
             }
             else
             {
-                std::memmove(end, start, (end - start) * sizeof(CharT));
-                std::fill(start, start + count, ch);
+                ::std::memmove(end, start, (end - start) * sizeof(CharT));
+                ::std::fill(start, start + count, ch);
             }
 
             resize_(size + count);
@@ -1670,9 +1670,9 @@ namespace bizwen
             auto s_size = str.size_();
 
             if (s_index > s_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(s_size - s_index, count));
+            count = ::std::min(npos, ::std::min(s_size - s_index, count));
             auto s_start = str.begin_() + s_index;
             insert_(index, s_start, s_start + count);
 
@@ -1692,11 +1692,11 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                std::copy_backward(start, end, end + 1);
+                ::std::copy_backward(start, end, end + 1);
             }
             else
             {
-                std::memmove(end, start, (end - start) * sizeof(CharT));
+                ::std::memmove(end, start, (end - start) * sizeof(CharT));
             }
 
             *start = ch;
@@ -1726,7 +1726,7 @@ namespace bizwen
          * @brief this function use a temp basic_string, so it can't decl in class decl
          */
         template <class InputIt>
-            requires std::input_iterator<InputIt>
+            requires ::std::input_iterator<InputIt>
         constexpr iterator insert(const_iterator pos, InputIt first, InputIt last)
         {
             assert(("pos isn't in this string", pos.base().current_ >= begin_() && pos.base().current_ <= end_()));
@@ -1736,13 +1736,13 @@ namespace bizwen
             auto end = end_();
             auto index = start - begin_();
 
-            if constexpr (std::forward_iterator<InputIt>)
+            if constexpr (::std::forward_iterator<InputIt>)
             {
-                auto length = std::distance(first, last);
+                auto length = ::std::distance(first, last);
                 reserve(size + length);
                 auto begin = begin_();
-                std::copy_backward(begin + index, begin + size, begin + size + length);
-                std::ranges::copy(first, last, begin + index);
+                ::std::copy_backward(begin + index, begin + size, begin + size + length);
+                ::std::ranges::copy(first, last, begin + index);
                 resize_(size + length);
             }
             else
@@ -1761,9 +1761,9 @@ namespace bizwen
 #endif
         }
 
-        constexpr iterator insert(const_iterator pos, std::initializer_list<CharT> ilist)
+        constexpr iterator insert(const_iterator pos, ::std::initializer_list<CharT> ilist)
         {
-            auto i_data = std::data(ilist);
+            auto i_data = ::std::data(ilist);
             auto start = pos.base().current_;
 
             insert_(start - begin_(), i_data, i_data + ilist.size());
@@ -1777,10 +1777,10 @@ namespace bizwen
 
         // clang-format off
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& insert(size_type pos, const StringViewLike& t)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto sv_data = sv.data();
             insert_(pos, sv_data, sv_data + sv.size());
 
@@ -1788,17 +1788,17 @@ namespace bizwen
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& insert(size_type pos, const StringViewLike& t, size_type t_index, size_type count = npos)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto sv_size = sv.size();
             auto size = size_();
 
             if (t_index > sv_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(sv_size - t_index, count));
+            count = ::std::min(npos, ::std::min(sv_size - t_index, count));
             auto sv_data = sv.data();
             insert_(pos, sv_data + t_index, sv_data + t_index + count);
 
@@ -1816,11 +1816,11 @@ namespace bizwen
 
             if BIZWEN_CONSTEVAL
             {
-                std::copy(last, const_cast<basic_string const&>(*this).end_(), first);
+                ::std::copy(last, const_cast<basic_string const&>(*this).end_(), first);
             }
             else
             {
-                std::memcpy(first, last, (const_cast<basic_string const&>(*this).end_() - last) * sizeof(CharT));
+                ::std::memcpy(first, last, (const_cast<basic_string const&>(*this).end_() - last) * sizeof(CharT));
             }
 
             resize_(size() - (last - first));
@@ -1832,9 +1832,9 @@ namespace bizwen
             auto size = size_();
 
             if (index > size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count = std::min(npos, std::min(size - index, count));
+            count = ::std::min(npos, ::std::min(size - index, count));
             auto start = begin_() + index;
             erase_(start, start + count);
 
@@ -1881,11 +1881,11 @@ namespace bizwen
             auto size = size_();
 
             if (pos > size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
             auto begin = begin_();
             auto first1 = begin + pos;
-            auto last1 = begin + std::min(pos + count, size);
+            auto last1 = begin + ::std::min(pos + count, size);
             auto length1 = last1 - first1;
             auto length2 = last2 - first2;
             auto new_size = size + length1 - length2;
@@ -1898,16 +1898,16 @@ namespace bizwen
                 if BIZWEN_CONSTEVAL
                 {
                     if (diff > 0)
-                        std::copy(last1, end, last1 - diff);
+                        ::std::copy(last1, end, last1 - diff);
                     else if (diff < 0)
-                        std::copy_backward(last1, end, end - diff);
+                        ::std::copy_backward(last1, end, end - diff);
                 }
                 else
                 {
                     if (diff > 0)
-                        std::memmove(last1 + diff, last1, diff * sizeof(CharT));
+                        ::std::memmove(last1 + diff, last1, diff * sizeof(CharT));
                     else if (diff < 0)
-                        std::memmove(last1 - diff, last1, -diff * sizeof(CharT));
+                        ::std::memmove(last1 - diff, last1, -diff * sizeof(CharT));
                 }
 
                 if (first2 >= last1 && last2 <= end)
@@ -1918,11 +1918,11 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy(first2, last2, first1);
+                    ::std::copy(first2, last2, first1);
                 }
                 else
                 {
-                    std::memmove(first1, first2, length2 * sizeof(CharT));
+                    ::std::memmove(first1, first2, length2 * sizeof(CharT));
                 }
             }
             else
@@ -1934,15 +1934,15 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    std::copy(begin, first1, temp_begin);
-                    std::copy(first2, last2, temp_start);
-                    std::copy(last1, end, temp_start + length2);
+                    ::std::copy(begin, first1, temp_begin);
+                    ::std::copy(first2, last2, temp_start);
+                    ::std::copy(last1, end, temp_start + length2);
                 }
                 else
                 {
-                    std::memcpy(begin, temp_begin, first1 - begin * sizeof(CharT));
-                    std::memcpy(temp_start, first2, length2 * sizeof(CharT));
-                    std::memcpy(temp_start + length2, last1, (end - last1) * sizeof(CharT));
+                    ::std::memcpy(begin, temp_begin, first1 - begin * sizeof(CharT));
+                    ::std::memcpy(temp_start, first2, length2 * sizeof(CharT));
+                    ::std::memcpy(temp_start + length2, last1, (end - last1) * sizeof(CharT));
                 }
 
                 temp.swap(*this);
@@ -1972,9 +1972,9 @@ namespace bizwen
             auto str_size = str.size_();
 
             if (pos2 > str_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count2 = std::min(npos, std::min(count2, str_size - pos2));
+            count2 = ::std::min(npos, ::std::min(count2, str_size - pos2));
             auto begin = str.begin_();
             replace_(pos, count, begin + count2, begin + count2 + pos2);
 
@@ -2011,9 +2011,9 @@ namespace bizwen
             return *this;
         }
 
-        constexpr basic_string& replace(const_iterator first, const_iterator last, std::initializer_list<CharT> ilist)
+        constexpr basic_string& replace(const_iterator first, const_iterator last, ::std::initializer_list<CharT> ilist)
         {
-            auto data = std::data(ilist);
+            auto data = ::std::data(ilist);
             auto start = first.base().current_;
             replace_(start - begin_(), last - first, data, data + ilist.size());
 
@@ -2021,10 +2021,10 @@ namespace bizwen
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& replace(size_type pos, size_type count, const StringViewLike& t)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto data = sv.data();
             replace_(pos, count, data, data + sv.size());
 
@@ -2032,10 +2032,10 @@ namespace bizwen
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& replace(const_iterator first, const_iterator last, const StringViewLike& t)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto sv_data = sv.data();
             auto start = first.base().current_;
             replace_(start - begin_(), last - first, sv_data, sv_data + sv.size());
@@ -2044,16 +2044,16 @@ namespace bizwen
         }
 
         template <class StringViewLike>
-            requires std::is_convertible_v<const StringViewLike&, std::basic_string_view<CharT, Traits>> && (!std::is_convertible_v<const StringViewLike&, const CharT*>)
+            requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         basic_string& replace(size_type pos, size_type count, const StringViewLike& t, size_type pos2, size_type count2 = npos)
         {
-            std::basic_string_view<CharT, Traits> sv = t;
+            ::std::basic_string_view<CharT, Traits> sv = t;
             auto sv_size = sv.size();
 
             if (pos2 > sv_size)
-                throw std::out_of_range{ exception_string_ };
+                throw ::std::out_of_range{ exception_string_ };
 
-            count2 = std::min(npos, std::min(sv_size - pos2, count2));
+            count2 = ::std::min(npos, ::std::min(sv_size - pos2, count2));
 
             auto data = sv.data();
             replace_(pos, count, data + pos2, data + pos2 + count2);
@@ -2082,14 +2082,14 @@ namespace bizwen
 
         template <class InputIt>
         basic_string& replace(const_iterator first, const_iterator last, InputIt first2, InputIt last2)
-            requires std::input_iterator<InputIt>
+            requires ::std::input_iterator<InputIt>
         {
             auto start = first.base().current_;
 
-            if constexpr (std::contiguous_iterator<InputIt>)
+            if constexpr (::std::random_access_iterator<InputIt>)
             {
-                auto data = std::addressof(*first2);
-                auto length2 = std::distance(first2, last2);
+                auto data = ::std::addressof(*first2);
+                auto length2 = ::std::distance(first2, last2);
                 replace_(start - begin_(), last - first, data, data + length2);
             }
             else
@@ -2115,5 +2115,5 @@ namespace bizwen
     static_assert(sizeof(u8string) == sizeof(char8_t*) * 4);
     static_assert(sizeof(u16string) == sizeof(char8_t*) * 4);
     static_assert(sizeof(u32string) == sizeof(char8_t*) * 4);
-    static_assert(std::contiguous_iterator<string::iterator>);
+    static_assert(::std::contiguous_iterator<string::iterator>);
 }
