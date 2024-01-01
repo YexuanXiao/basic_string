@@ -30,14 +30,6 @@ namespace bizwen
     template <character CharT, class Traits = ::std::char_traits<CharT>, class Allocator = ::std::allocator<CharT>> class alignas(alignof(int*)) basic_string
     {
     private:
-        /*
-         * @brief type of null tag
-         */
-        enum class null_t : char
-        {
-            null_v
-        };
-
         /**
          * @brief type of long string
          */
@@ -80,10 +72,9 @@ namespace bizwen
         /**
          * @brief flag > 0: short string, length of string is size_flag
          * @brief flag = 0: empty string
-         * @brief flag = -1: long string, length of string is end - begin
-         * @brief flag = -2: null string
+         * @brief flag = MAX: long string, length of string is end - begin
          */
-        typename ::std::make_signed_t<CharT> size_flag_{};
+        typename ::std::make_unsigned_t<CharT> size_flag_{};
 
         using atraits_t_ = ::std::allocator_traits<Allocator>;
 
@@ -91,34 +82,21 @@ namespace bizwen
 
         constexpr bool is_long_() const noexcept
         {
-            assert(("string is null", !is_null_()));
-
-            return size_flag_ == -1;
+            return size_flag_ == decltype(size_flag_)(-1);
         }
 
         constexpr bool is_short_() const noexcept
         {
-            assert(("string is null", !is_null_()));
-
-            return size_flag_ > 0;
+            return size_flag_ != decltype(size_flag_)(-1);
         }
 
         constexpr bool is_empty_() const noexcept
         {
-            assert(("string is null", !is_null_()));
-
             return !size_flag_;
-        }
-
-        constexpr bool is_null_() const noexcept
-        {
-            return size_flag_ == -2;
         }
 
         constexpr ::std::size_t size_() const noexcept
         {
-            assert(("string is null", !is_null_()));
-
             if (is_long_())
             {
                 auto&& ls = stor_.ls_;
@@ -143,28 +121,6 @@ namespace bizwen
         using const_pointer = typename ::std::allocator_traits<Allocator>::const_pointer;
 
         static inline constexpr size_type npos = -1;
-
-        using null_t::null_v;
-
-        /**
-         * @brief check if string is null
-         * @brief the only way to create a null string is through the null_t constructor
-         */
-        constexpr bool null() const noexcept
-        {
-            return is_null_();
-        }
-
-        /**
-         * @brief transform null string to empty string
-         * @brief operator= and transform is the only legal modification operations for a null string
-         */
-        constexpr void transform_null_to_empty() noexcept
-        {
-            assert(("only null string can call transform null to empty", !is_null_()));
-
-            size_flag_ = 0;
-        }
 
         // ********************************* begin volume ******************************
 
@@ -237,8 +193,6 @@ namespace bizwen
          */
         constexpr CharT const* begin_() const noexcept
         {
-            assert(("string is null", !is_null_()));
-
             if (is_long_())
                 return stor_.ls_.begin_;
             else
@@ -260,14 +214,12 @@ namespace bizwen
          */
         constexpr CharT const* end_() const noexcept
         {
-            assert(("string is null", !is_null_()));
-
             if (is_long_())
                 return stor_.ls_.end_;
             else
                 return stor_.ss_.data() + size_flag_;
         }
-        
+
         /**
          * @brief internal use
          * @return a pointer to the next position of the last element
@@ -571,8 +523,6 @@ namespace bizwen
          */
         constexpr void allocate_plus_one_(size_type n)
         {
-            assert(("string is null", !is_null_()));
-
             // strong exception safe grantee
             if (n <= short_string_max_ && !is_long_())
             {
@@ -600,7 +550,6 @@ namespace bizwen
          */
         constexpr void dealloc_(ls_type_& ls) noexcept
         {
-            assert(("string is null", !is_null_()));
             atraits_t_::deallocate(allocator_, ls.begin_, ls.last_ - ls.begin_);
         }
 
@@ -647,7 +596,6 @@ namespace bizwen
          */
         constexpr void fill_(CharT const* begin, CharT const* end) noexcept
         {
-            assert(("string is null", !is_null_()));
             assert(("cannot storage string in current allocated storage", static_cast<size_type>(end - begin) <= capacity()));
 
             if BIZWEN_CONSTEVAL
@@ -656,7 +604,7 @@ namespace bizwen
             }
             else
             {
-                ::std::memcpy(begin_(), begin, (end - begin) * sizeof(CharT));
+                ::std::memmove(begin_(), begin, (end - begin) * sizeof(CharT));
             }
         }
 
@@ -745,11 +693,11 @@ namespace bizwen
 
                 if BIZWEN_CONSTEVAL
                 {
-                    ::std::copy_backward(begin + index, end, end + length);
+                    ::std::copy_backward(start, end, end + length);
                 }
                 else
                 {
-                    ::std::memmove(end, begin + index, length * sizeof(CharT));
+                    ::std::memmove(end, start, length * sizeof(CharT));
                 }
 
                 // re-cacl first and last, because range is in *this
@@ -765,7 +713,7 @@ namespace bizwen
                 }
                 else
                 {
-                    ::std::memcpy(start, first, length * sizeof(CharT));
+                    ::std::memmove(start, first, length * sizeof(CharT));
                 }
             }
             else
@@ -784,9 +732,84 @@ namespace bizwen
                 }
                 else
                 {
-                    ::std::memcpy(start, begin, index * sizeof(CharT));
+                    ::std::memcpy(temp_begin, begin, index * sizeof(CharT));
                     ::std::memcpy(temp_start, first, length * sizeof(CharT));
                     ::std::memcpy(temp_start + length, start, (end - start) * sizeof(CharT));
+                }
+
+                temp.swap(*this);
+            }
+
+            resize_(new_size);
+        }
+
+        constexpr void replace_(size_type pos, size_type count, CharT const* first2, CharT const* last2)
+        {
+            auto size = size_();
+
+            if (pos > size)
+                throw ::std::out_of_range{ exception_string_ };
+
+            auto begin = begin_();
+            auto first1 = begin + pos;
+            auto last1 = begin + ::std::min(pos + count, size);
+            auto length1 = last1 - first1;
+            auto length2 = last2 - first2;
+            auto new_size = size + length1 - length2;
+            auto end = begin + size;
+
+            if (!(last1 < first2 || last2 < first1) && new_size <= capacity())
+            {
+                auto diff = length1 - length2;
+
+                if BIZWEN_CONSTEVAL
+                {
+                    if (diff > 0)
+                        ::std::copy(last1, end, last1 - diff);
+                    else if (diff < 0)
+                        ::std::copy_backward(last1, end, end - diff);
+                }
+                else
+                {
+                    if (diff > 0)
+                        ::std::memmove(last1 + diff, last1, diff * sizeof(CharT));
+                    else if (diff < 0)
+                        ::std::memmove(last1 - diff, last1, -diff * sizeof(CharT));
+                }
+
+                if (first2 >= last1 && last2 <= end)
+                {
+                    first2 += diff;
+                    last2 += diff;
+                }
+
+                if BIZWEN_CONSTEVAL
+                {
+                    ::std::copy(first2, last2, first1);
+                }
+                else
+                {
+                    ::std::memmove(first1, first2, length2 * sizeof(CharT));
+                }
+            }
+            else
+            {
+                basic_string temp{};
+                temp.allocate_plus_one_(new_size);
+                auto temp_begin = temp.begin_();
+                auto temp_start = temp.begin_() + (first1 - begin);
+
+                if BIZWEN_CONSTEVAL
+                {
+                    ::std::copy(begin, first1, temp_begin);
+                    ::std::copy(first2, last2, temp_start);
+                    ::std::copy(last1, end, temp_start + length2);
+                }
+                else
+                {
+                    ::std::memcpy(begin, temp_begin, first1 - begin * sizeof(CharT));
+                    ::std::memcpy(temp_start, first2, length2 * sizeof(CharT));
+                    ::std::memcpy(temp_start + length2, last1, (end - last1) * sizeof(CharT));
                 }
 
                 temp.swap(*this);
@@ -896,7 +919,6 @@ namespace bizwen
 
         constexpr void swap(basic_string& other) noexcept
         {
-            assert(("string is null", !is_null_()));
             auto&& self = *this;
             ::std::ranges::swap(self.allocator_, other.allocator_);
             ::std::ranges::swap(self.stor_, other.stor_);
@@ -911,11 +933,6 @@ namespace bizwen
         // ********************************* begin constructor ******************************
 
         constexpr basic_string() noexcept = default;
-
-        constexpr basic_string(null_t) noexcept
-        {
-            size_flag_ = -2;
-        }
 
         constexpr basic_string(size_type n, CharT ch)
         {
@@ -965,7 +982,7 @@ namespace bizwen
                 }
                 else
                 {
-                    ::std::memcpy(other_begin, start, (last - start) * sizeof(CharT));
+                    ::std::memmove(other_begin, start, (last - start) * sizeof(CharT));
                 }
             }
 
@@ -1272,10 +1289,15 @@ namespace bizwen
             }
             else
             {
-                auto res = basic_string::traits_type::compare(lhs.begin_(), rhs.begin(), ::std::min(rsize, lsize));
+                auto res = basic_string::traits_type::compare(lhs.begin_(), rhs.begin_(), ::std::min(rsize, lsize));
                 if (res > 0)
                     return ::std::strong_ordering::greater;
                 else if (res < 0)
+                    return ::std::strong_ordering::less;
+
+                if (lsize > rsize)
+                    return ::std::strong_ordering::greater;
+                else if (lsize < rsize)
                     return ::std::strong_ordering::less;
                 else
                     return ::std::strong_ordering::equal;
@@ -1312,6 +1334,11 @@ namespace bizwen
                     return ::std::strong_ordering::greater;
                 else if (res < 0)
                     return ::std::strong_ordering::less;
+
+                if (lsize > rsize)
+                    return ::std::strong_ordering::greater;
+                else if (lsize < rsize)
+                    return ::std::strong_ordering::less;
                 else
                     return ::std::strong_ordering::equal;
             }
@@ -1337,7 +1364,7 @@ namespace bizwen
             }
             else
             {
-                return basic_string::traits_type::compare(lhs.begin_(), rhs.begin(), ::std::min(rsize, lsize));
+                return !basic_string::traits_type::compare(lhs.begin_(), rhs.begin_(), ::std::min(rsize, lsize));
             }
         }
 
@@ -1362,7 +1389,7 @@ namespace bizwen
             }
             else
             {
-                return basic_string::traits_type::compare(lhs.begin_(), start, ::std::min(rsize, lsize));
+                return !basic_string::traits_type::compare(lhs.begin_(), start, ::std::min(rsize, lsize));
             }
         }
 
@@ -1635,7 +1662,7 @@ namespace bizwen
             }
             else
             {
-                ::std::memmove(end, start, (end - start) * sizeof(CharT));
+                ::std::memmove(end, start, count * sizeof(CharT));
                 ::std::fill(start, start + count, ch);
             }
 
@@ -1696,7 +1723,7 @@ namespace bizwen
             }
             else
             {
-                ::std::memmove(end, start, (end - start) * sizeof(CharT));
+                ::std::memmove(end, start, sizeof(CharT));
             }
 
             *start = ch;
@@ -1820,7 +1847,7 @@ namespace bizwen
             }
             else
             {
-                ::std::memcpy(first, last, (const_cast<basic_string const&>(*this).end_() - last) * sizeof(CharT));
+                ::std::memmove(first, last, (const_cast<basic_string const&>(*this).end_() - last) * sizeof(CharT));
             }
 
             resize_(size() - (last - first));
@@ -1875,83 +1902,6 @@ namespace bizwen
 
         // ********************************* begin replace ******************************
 
-    private:
-        constexpr void replace_(size_type pos, size_type count, CharT const* first2, CharT const* last2)
-        {
-            auto size = size_();
-
-            if (pos > size)
-                throw ::std::out_of_range{ exception_string_ };
-
-            auto begin = begin_();
-            auto first1 = begin + pos;
-            auto last1 = begin + ::std::min(pos + count, size);
-            auto length1 = last1 - first1;
-            auto length2 = last2 - first2;
-            auto new_size = size + length1 - length2;
-            auto end = begin + size;
-
-            if (!(last1 < first2 || last2 < first1) && new_size <= capacity())
-            {
-                auto diff = length1 - length2;
-
-                if BIZWEN_CONSTEVAL
-                {
-                    if (diff > 0)
-                        ::std::copy(last1, end, last1 - diff);
-                    else if (diff < 0)
-                        ::std::copy_backward(last1, end, end - diff);
-                }
-                else
-                {
-                    if (diff > 0)
-                        ::std::memmove(last1 + diff, last1, diff * sizeof(CharT));
-                    else if (diff < 0)
-                        ::std::memmove(last1 - diff, last1, -diff * sizeof(CharT));
-                }
-
-                if (first2 >= last1 && last2 <= end)
-                {
-                    first2 += diff;
-                    last2 += diff;
-                }
-
-                if BIZWEN_CONSTEVAL
-                {
-                    ::std::copy(first2, last2, first1);
-                }
-                else
-                {
-                    ::std::memmove(first1, first2, length2 * sizeof(CharT));
-                }
-            }
-            else
-            {
-                basic_string temp{};
-                temp.allocate_plus_one_(new_size);
-                auto temp_begin = temp.begin_();
-                auto temp_start = temp.begin_() + (first1 - begin);
-
-                if BIZWEN_CONSTEVAL
-                {
-                    ::std::copy(begin, first1, temp_begin);
-                    ::std::copy(first2, last2, temp_start);
-                    ::std::copy(last1, end, temp_start + length2);
-                }
-                else
-                {
-                    ::std::memcpy(begin, temp_begin, first1 - begin * sizeof(CharT));
-                    ::std::memcpy(temp_start, first2, length2 * sizeof(CharT));
-                    ::std::memcpy(temp_start + length2, last1, (end - last1) * sizeof(CharT));
-                }
-
-                temp.swap(*this);
-            }
-
-            resize_(new_size);
-        }
-
-    public:
         constexpr basic_string& replace(size_type pos, size_type count, const basic_string& str)
         {
             replace_(pos, count, str.begin_(), str.end_());
