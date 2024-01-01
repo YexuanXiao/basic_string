@@ -135,12 +135,12 @@ namespace bizwen
         using traits_type = Traits;
         using value_type = CharT;
         using allocator_type = Allocator;
-        using size_type = ::std::allocator_traits<Allocator>::size_type;
-        using difference_type = ::std::allocator_traits<Allocator>::difference_type;
+        using size_type = typename ::std::allocator_traits<Allocator>::size_type;
+        using difference_type = typename ::std::allocator_traits<Allocator>::difference_type;
         using reference = value_type&;
         using const_reference = value_type const&;
-        using pointer = ::std::allocator_traits<Allocator>::pointer;
-        using const_pointer = ::std::allocator_traits<Allocator>::const_pointer;
+        using pointer = typename ::std::allocator_traits<Allocator>::pointer;
+        using const_pointer = typename ::std::allocator_traits<Allocator>::const_pointer;
 
         static inline constexpr size_type npos = -1;
 
