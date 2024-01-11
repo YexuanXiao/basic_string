@@ -1227,7 +1227,9 @@ namespace bizwen
 
         constexpr basic_string& operator=(basic_string&& other) noexcept
         {
-            return assign(other);
+            other.swap(*this);
+
+            return *this;
         }
 
         constexpr basic_string& operator=(const basic_string& str)
