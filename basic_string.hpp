@@ -74,7 +74,7 @@ namespace bizwen
          * @brief flag = 0: empty string
          * @brief flag = MAX: long string, length of string is end - begin
          */
-        typename ::std::make_unsigned_t<CharT> size_flag_{};
+        alignas(alignof(CharT)) unsigned char size_flag_{};
 
         using atraits_t_ = ::std::allocator_traits<Allocator>;
 
