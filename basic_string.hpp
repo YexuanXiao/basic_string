@@ -13,7 +13,7 @@
 #if defined(__cpp_if_consteval) && (__cpp_if_consteval >= 202106L)
 #define BIZWEN_CONSTEVAL consteval
 #else
-#define BIZWEN_CONSTEVAL constexpr(::std::is_constant_evaluated())
+#define BIZWEN_CONSTEVAL (::std::is_constant_evaluated())
 #endif
 
 namespace bizwen
@@ -618,7 +618,7 @@ namespace bizwen
 #if defined(__cpp_if_consteval) && (__cpp_if_consteval >= 202106L)
             if !consteval
 #else
-            if constexpr (!::std::is_constant_evaluated())
+            if (!::std::is_constant_evaluated())
 #endif
             {
                 if constexpr (::std::is_same_v<char, CharT>)
