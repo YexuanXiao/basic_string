@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iterator>
 #include <version>
+#include <cwchar>
 
 #if defined(__cpp_if_consteval) && (__cpp_if_consteval >= 202106L)
 #define BIZWEN_CONSTEVAL consteval
@@ -636,7 +637,7 @@ namespace bizwen
 				{
 					return ::std::strlen(begin);
 				}
-				else if (::std::is_same_v<wchar_t, CharT>)
+				else if constexpr (::std::is_same_v<wchar_t, CharT>)
 				{
 					return ::std::wcslen(begin);
 				}
