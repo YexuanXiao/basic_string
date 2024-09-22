@@ -52,8 +52,7 @@ void test()
 		l.assign(100, '1');
 		s.assign(l.data(), 20);
 		l.assign(s.data());
-		std::vector<char> ll(40, 'd');
-		l.assign(ll.begin(), ll.end());
+		l.assign(40, 'd');
 		s.assign({ 'a', 'b', 'c' });
 		l.assign(std::string_view{ "1234567890123456789012345678901" });
 		s.assign(std::string_view{ "1234567890123456789012345678901" }, 30);
