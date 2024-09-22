@@ -1192,6 +1192,20 @@ namespace bizwen
 
 		constexpr basic_string& assign(const basic_string& str)
 		{
+
+			if (std::addressof(str) == this)
+				return *this;
+
+			if constexpr (::std::allocator_traits<Allocator>::propagate_on_container_copy_assignment::value)
+			{
+				if (allocator_ != str.allocator_)
+				{
+					basic_string temp{ allocator_ };
+					temp.swap(*this);
+					allocator_ = str.allocator_;
+				}
+			}
+
 			assign_(str.begin_(), str.end_());
 
 			return *this;
@@ -1213,7 +1227,17 @@ namespace bizwen
 
 		constexpr basic_string& assign(basic_string&& str) noexcept
 		{
-			str.swap(*this);
+			if constexpr (::std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value)
+			{
+				other.swap(*this);
+			}
+			else
+			{
+				if (allocator_ == other.allocator_)
+					other.swap_without_ator(*this);
+				else
+					assign_(other.begin_(), other.end_());
+			}
 
 			return *this;
 		}
@@ -1287,36 +1311,11 @@ namespace bizwen
 
 		constexpr basic_string& operator=(basic_string&& other) noexcept(std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value || std::allocator_traits<Allocator>::is_always_equal::value)
 		{
-			if constexpr (::std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value)
-			{
-				other.swap(*this);
-			}
-			else
-			{
-				if (allocator_ == other.allocator_)
-					other.swap_without_ator(*this);
-				else
-					assign(other);
-			}
-
-			return *this;
+			return assign(std::move(other));
 		}
 
 		constexpr basic_string& operator=(const basic_string& str)
 		{
-			if (std::addressof(str) == this)
-				return *this;
-
-			if constexpr (::std::allocator_traits<Allocator>::propagate_on_container_copy_assignment::value)
-			{
-				if (allocator_ != str.allocator_)
-				{
-					basic_string temp{};
-					temp.swap(*this);
-					allocator_ = str.allocator_;
-				}
-			}
-
 			return assign(str);
 		}
 
