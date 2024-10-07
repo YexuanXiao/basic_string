@@ -1009,7 +1009,7 @@ namespace bizwen
 		    requires ::std::input_iterator<InputIt>
 		constexpr basic_string(InputIt first, InputIt last)
 		{
-			if constexpr (::std::forward_iterator<InputIt>)
+			if constexpr (::std::random_access_iterator<InputIt>)
 			{
 				auto length = ::std::ranges::distance(first, last);
 				allocate_plus_one_(length);
@@ -1159,7 +1159,7 @@ namespace bizwen
 		    requires ::std::input_iterator<InputIt>
 		constexpr basic_string& append(InputIt first, InputIt last)
 		{
-			if constexpr (::std::forward_iterator<InputIt>)
+			if constexpr (::std::random_access_iterator<InputIt>)
 			{
 				auto size = size_();
 				auto length = ::std::ranges::distance(first, last);
@@ -1847,7 +1847,7 @@ namespace bizwen
 			auto end = end_();
 			auto index = start - begin_();
 
-			if constexpr (::std::forward_iterator<InputIt>)
+			if constexpr (::std::random_access_iterator<InputIt>)
 			{
 				auto length = ::std::distance(first, last);
 				reserve(size + length);
