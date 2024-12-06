@@ -64,6 +64,7 @@ class alignas(CharT *) basic_string
         {
             return ::std::to_address(begin_);
         }
+
         constexpr auto end() const noexcept
         {
             return ::std::to_address(end_);
@@ -227,14 +228,7 @@ class alignas(CharT *) basic_string
 
     constexpr bool empty() const noexcept
     {
-        if (is_long_())
-        {
-            return long_str_().end() == long_str_().begin();
-        }
-        else
-        {
-            return size_flag_ == 0u;
-        }
+        return !size_();
     }
 
     /**
@@ -681,9 +675,9 @@ class alignas(CharT *) basic_string
             static_cast<atraits_t_::size_type>(ls.last_ - ::std::to_address(ls.begin_) + 1uz /* null terminator */));
     }
 
-    // avoid access the deactive member of union
     constexpr void dealloc_(bool is_long) noexcept
     {
+        // avoid access the inactive member of union
         if (is_long)
             dealloc_(long_str_());
     }
@@ -1114,6 +1108,7 @@ class alignas(CharT *) basic_string
         {
             if (pos != 0uz)
                 ::std::ranges::copy(other.begin_() + pos, other.begin_() + pos + count, other.begin_());
+
             other.resize_shrink_(other.is_long_(), count);
             stor_ = other.stor_;
             size_flag_ = other.size_flag_;
@@ -1349,8 +1344,8 @@ class alignas(CharT *) basic_string
     friend constexpr ::std::strong_ordering operator<=>(basic_string const &lhs, CharT const *rhs) noexcept
     {
         auto start = rhs;
-        auto rsize = basic_string::c_string_length_(start);
-        auto lsize = lhs.size_();
+        auto const rsize = basic_string::c_string_length_(start);
+        auto const lsize = lhs.size_();
 
         for (auto begin = lhs.begin_(), end = begin + ::std::ranges::min(lsize, rsize); begin != end; ++begin, ++start)
         {
@@ -1468,7 +1463,7 @@ class alignas(CharT *) basic_string
     constexpr basic_string& append(StringViewLike const & t)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
-        append_(sv.data(),sv.data()+sv.size());
+        append_(sv.data(), sv.data() + sv.size());
 
         return *this;
     }
@@ -1483,7 +1478,6 @@ class alignas(CharT *) basic_string
             throw out_of_range();
 
         count = ::std::ranges::min(sv.size() - pos, count);
-
         append_(sv.data() + pos,sv.data() + pos + count);
 
         return *this;
@@ -1650,6 +1644,7 @@ class alignas(CharT *) basic_string
         auto const begin = begin_();
         auto const end = end_();
         auto const is_long = is_long_();
+
         if (capacity() >= new_size)
         {
             ::std::ranges::copy_backward(begin + index, end, end + count);
@@ -1992,7 +1987,6 @@ class alignas(CharT *) basic_string
             throw out_of_range();
 
         count = ::std::ranges::min(size_() - pos, count);
-
         auto const size = size_();
         auto const new_size = size - count + count2;
         auto const begin = begin_();
@@ -2058,8 +2052,8 @@ class alignas(CharT *) basic_string
         if constexpr (::std::ranges::contiguous_range<R> &&
                       ::std::is_same_v<value_type, ::std::ranges::range_value_t<R>>)
         {
-            auto first = ::std::ranges::begin(rg);
-            auto last = ::std::ranges::end(rg);
+            auto const first = ::std::ranges::begin(rg);
+            auto const last = ::std::ranges::end(rg);
             assign_(::std::to_address(first), ::std::to_address(first) + ::std::ranges::distance(first, last));
         }
         else
@@ -2079,8 +2073,8 @@ class alignas(CharT *) basic_string
         if constexpr (::std::ranges::contiguous_range<R> &&
                       ::std::is_same_v<value_type, ::std::ranges::range_value_t<R>>)
         {
-            auto first = ::std::ranges::begin(rg);
-            auto last = ::std::ranges::end(rg);
+            auto const first = ::std::ranges::begin(rg);
+            auto const last = ::std::ranges::end(rg);
             insert_(index, ::std::to_address(first), ::std::to_address(first) + ::std::ranges::distance(first, last));
         }
         else
@@ -2098,8 +2092,8 @@ class alignas(CharT *) basic_string
         if constexpr (::std::ranges::contiguous_range<R> &&
                       ::std::is_same_v<value_type, ::std::ranges::range_value_t<R>>)
         {
-            auto first = ::std::ranges::begin(rg);
-            auto last = ::std::ranges::end(rg);
+            auto const first = ::std::ranges::begin(rg);
+            auto const last = ::std::ranges::end(rg);
             append_(::std::to_address(first), ::std::to_address(first) + ::std::ranges::distance(first, last));
         }
         else
@@ -2117,8 +2111,8 @@ class alignas(CharT *) basic_string
         if constexpr (::std::ranges::contiguous_range<R> &&
                       ::std::is_same_v<value_type, ::std::ranges::range_value_t<R>>)
         {
-            auto first2 = ::std::ranges::begin(rg);
-            auto last2 = ::std::ranges::end(rg);
+            auto const first2 = ::std::ranges::begin(rg);
+            auto const last2 = ::std::ranges::end(rg);
             replace_(first.base().current_ - begin_(), last - first, ::std::to_address(first2),
                      ::std::to_address(first2) + ::std::ranges::distance(first2, last2));
         }
@@ -2213,6 +2207,7 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(bizwen::ba
                                                                       bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
 {
     lhs.append(rhs);
+
     return std::move(lhs);
 }
 
@@ -2221,6 +2216,7 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
     bizwen::basic_string<CharT, Traits, Alloc> &&lhs, const bizwen::basic_string<CharT, Traits, Alloc> &rhs)
 {
     lhs.append(rhs);
+
     return std::move(lhs);
 }
 
@@ -2238,6 +2234,7 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
     const bizwen::basic_string<CharT, Traits, Alloc> &lhs, bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
 {
     rhs.insert(0uz, lhs);
+
     return std::move(rhs);
 }
 
@@ -2256,6 +2253,7 @@ inline constexpr typename basic_string<CharT, Traits, Alloc>::size_type erase(ba
 {
     auto const r = std::ranges::size(std::ranges::remove(c, value));
     c.resize(c.size() - r);
+
     return r;
 }
 
