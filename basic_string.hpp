@@ -89,7 +89,7 @@ class alignas(alignof(int *)) basic_string
      */
     static constexpr auto out_of_range() noexcept
     {
-        return ::std::out_of_range("Pos/index is out of range, please check it.");
+        return ::std::out_of_range("pos/index is out of range, please check it.");
     }
 
     /**
@@ -102,44 +102,17 @@ class alignas(alignof(int *)) basic_string
             // [utilities.comparisons.general] strict total order over pointers.
             ::std::ranges::greater greater;
             ::std::ranges::less less;
+
             if (less(first_inner, first_outer) || greater(first_inner, last_outer))
             {
                 assert(("input range overlaps with *this but is larger.",
                         less(last_inner, first_outer) || greater(last_inner, last_outer)));
+
                 return false;
             }
         }
         // always assume overlap during constant evaluation
         return true;
-    }
-
-    constexpr unsigned char short_size_() const noexcept
-    {
-        return size_flag_;
-    }
-
-    /**
-     * @brief change the length of the short string and set the null terminator.
-     */
-    constexpr void short_size_(::std::size_t size)
-    {
-        size_flag_ = static_cast<unsigned char>(size);
-        // gcc thinks it's out of range,
-        // so make gcc happy
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#pragma GCC diagnostic ignored "-Wstringop-overflow"
-#endif
-        stor_.ss_[size_flag_] = CharT{};
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-    }
-
-    constexpr ::std::size_t long_size_() const noexcept
-    {
-        return stor_.ls_.end_ - stor_.ls_.begin_;
     }
 
     constexpr ls_type_ &long_stor_() const noexcept
@@ -148,7 +121,7 @@ class alignas(alignof(int *)) basic_string
     }
 
     /**
-     * @brief convert to long string and set the flag.
+     * @brief convert to long string and set the flag
      */
     constexpr void long_stor(ls_type_ const &ls) noexcept
     {
@@ -157,14 +130,23 @@ class alignas(alignof(int *)) basic_string
         *ls.end_ = CharT{};
     }
 
-    constexpr decltype(stor_.ss_) &short_stor_() const noexcept
+    /**
+     * @brief convert to short string and resize
+     */
+    constexpr void short_stor(::std::size_t size) noexcept
+    {
+        stor_.ss_ = decltype(stor_.ss_)();
+        size_flag_ = static_cast<unsigned char>(size);
+    }
+
+    constexpr auto &short_stor_() const noexcept
     {
         return stor_.ss_;
     }
 
     constexpr bool is_long_() const noexcept
     {
-        return short_size() == (unsigned char)(-1);
+        return size_flag_ == (unsigned char)(-1);
     }
 
     constexpr bool is_short_() const noexcept
@@ -174,17 +156,21 @@ class alignas(alignof(int *)) basic_string
 
     constexpr void resize_shrink_(bool is_long, ::std::size_t n) noexcept
     {
-        is_long ? long_size_(n) : short_size_(n);
+        if (is_long)
+        {
+            stor_.ls_.end_ = stor_.ls_.begin_ + n;
+            *stor_.ls_.end_ = CharT{};
+        }
+        else
+        {
+            size_flag_ = static_cast<unsigned char>(n);
+            stor_.ss_[size_flag_] = CharT{};
+        }
     }
 
     constexpr ::std::size_t size_() const noexcept
     {
-        return is_short_() ? short_size() : long_stor_().end_ - long_stor_().begin_;
-    }
-
-    constexpr bool is_empty_() const noexcept
-    {
-        return !size_();
+        return is_short_() ? size_flag_ : long_stor_().end_ - long_stor_().begin_;
     }
 
   public:
@@ -214,7 +200,7 @@ class alignas(alignof(int *)) basic_string
 
     constexpr bool empty() const noexcept
     {
-        return is_empty_();
+        return !size_();
     }
 
     /**
@@ -239,8 +225,7 @@ class alignas(alignof(int *)) basic_string
         {
             // copy to local
             auto const ls = long_stor_();
-            stor_.ss_ = decltype(stor_.ss_)();
-            short_size_(size_());
+            short_stor(size_());
             ::std::ranges::copy(ls.begin_, ls.end_ + 1uz /* null terminator */, short_stor_().data());
             dealloc_(true, ls);
         }
@@ -321,28 +306,28 @@ class alignas(alignof(int *)) basic_string
 
     constexpr const CharT &front() const noexcept
     {
-        assert(("string is empty.", !is_empty_()));
+        assert(("string is empty.", !empty()));
 
         return *begin_();
     }
 
     constexpr CharT &front()
     {
-        assert(("string is empty.", !is_empty_()));
+        assert(("string is empty.", !empty()));
 
         return *begin_();
     }
 
     constexpr const CharT &back() const noexcept
     {
-        assert(("string is empty", !is_empty_()));
+        assert(("string is empty", !empty()));
 
         return *(end_() - 1uz);
     }
 
     constexpr CharT &back()
     {
-        assert(("string is empty", !is_empty_()));
+        assert(("string is empty", !empty()));
 
         return *(end_() - 1uz);
     }
@@ -838,7 +823,7 @@ class alignas(alignof(int *)) basic_string
         }
         else
         {
-            short_size_(n);
+            resize_shrink_(false, n);
         }
     }
 
@@ -929,8 +914,7 @@ class alignas(alignof(int *)) basic_string
 
             stor_ = other.stor_;
             resize_shrink_(other.is_long_(), count);
-            other.stor_.ss_ = decltype(stor_.ss_)();
-            other.size_flag_ = 0u;
+            other.short_stor(0uz);
         }
         else
         {
@@ -1722,7 +1706,7 @@ class alignas(alignof(int *)) basic_string
 
     constexpr void pop_back() noexcept
     {
-        assert(("string is empty", !is_empty_()));
+        assert(("string is empty", !empty()));
         resize_(size_() - 1uz);
     }
 
