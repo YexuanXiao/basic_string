@@ -26,7 +26,7 @@
 
 namespace bizwen
 {
-template <typename CharT, class Traits = ::std::char_traits<CharT>, class Allocator = ::std::allocator<CharT>>
+template <typename CharT, typename Traits = ::std::char_traits<CharT>, typename Allocator = ::std::allocator<CharT>>
 class alignas(alignof(int *)) basic_string
 {
     static_assert(::std::is_same_v<char, CharT> || ::std::is_same_v<wchar_t, CharT> ||
@@ -137,12 +137,12 @@ class alignas(alignof(int *)) basic_string
         return true;
     }
 
-    constexpr ls_type_ &long_stor_() const noexcept
+    constexpr ls_type_ &long_str_() const noexcept
     {
         return stor_.ls_;
     }
 
-    constexpr auto &short_stor_() const noexcept
+    constexpr auto &short_str_() const noexcept
     {
         return stor_.ss_;
     }
@@ -150,9 +150,9 @@ class alignas(alignof(int *)) basic_string
     /**
      * @brief convert to long string and set the flag
      */
-    constexpr void long_stor(ls_type_ const &ls) noexcept
+    constexpr void long_str_(ls_type_ const &ls) noexcept
     {
-        long_stor_() = ls;
+        long_str_() = ls;
         size_flag_ = static_cast<unsigned char>(-1);
         *ls.end() = CharT{};
     }
@@ -160,11 +160,11 @@ class alignas(alignof(int *)) basic_string
     /**
      * @brief convert to short string and resize
      */
-    constexpr void short_stor(size_type size) noexcept
+    constexpr void short_str_(size_type size) noexcept
     {
         stor_.ss_ = decltype(stor_.ss_){};
         size_flag_ = static_cast<unsigned char>(size);
-        *short_stor_()[size] = CharT{};
+        short_str_()[size] = CharT{};
     }
 
     constexpr bool is_long_() const noexcept
@@ -181,19 +181,22 @@ class alignas(alignof(int *)) basic_string
     {
         if (is_long)
         {
-            stor_.ls_.end() = stor_.ls_.begin() + n;
-            *stor_.ls_.end() = CharT{};
+            assert(n == static_cast<unsigned char>(-1));
+            auto &ls = long_str_();
+            ls.end() = ls.begin() + n;
+            *ls.end() = CharT{};
         }
         else
         {
+            assert(n != static_cast<unsigned char>(-1));
             size_flag_ = static_cast<unsigned char>(n);
-            stor_.ss_[size_flag_] = CharT{};
+            short_str_()[size_flag_] = CharT{};
         }
     }
 
     constexpr size_type size_() const noexcept
     {
-        return is_short_() ? size_flag_ : long_stor_().end() - long_stor_().begin();
+        return is_short_() ? size_flag_ : long_str_().end() - long_str_().begin();
     }
 
     // ********************************* begin volume ******************************
@@ -210,7 +213,7 @@ class alignas(alignof(int *)) basic_string
 
     constexpr bool empty() const noexcept
     {
-        return size_flag_ == 0u || long_stor_().end() == long_stor_().begin();
+        return size_flag_ == 0u || long_str_().end() == long_str_().begin();
     }
 
     /**
@@ -223,7 +226,7 @@ class alignas(alignof(int *)) basic_string
 
     constexpr size_type capacity() const noexcept
     {
-        return is_short_() ? short_str_max_ : long_stor_().last_ - long_stor_().begin();
+        return is_short_() ? short_str_max_ : long_str_().last_ - long_str_().begin();
     }
 
     /**
@@ -234,9 +237,9 @@ class alignas(alignof(int *)) basic_string
         if (is_long_() && size_() <= short_str_max_)
         {
             // copy to local
-            auto const ls = long_stor_();
-            short_stor(size_());
-            ::std::ranges::copy(ls.begin_, ls.end_, short_stor_().data());
+            auto const ls = long_str_();
+            short_str_(size_());
+            ::std::ranges::copy(ls.begin_, ls.end_, short_str_().data());
             dealloc_(true, ls);
         }
     }
@@ -249,7 +252,7 @@ class alignas(alignof(int *)) basic_string
      */
     constexpr const_pointer begin_() const noexcept
     {
-        return is_short_() ? short_stor_().begin() : long_stor_().begin_;
+        return is_short_() ? short_str_().begin() : long_str_().begin_;
     }
 
     /**
@@ -257,7 +260,7 @@ class alignas(alignof(int *)) basic_string
      */
     constexpr pointer begin_() noexcept
     {
-        return is_short_() ? short_stor_().begin() : long_stor_().begin_;
+        return is_short_() ? short_str_().begin() : long_str_().begin_;
     }
 
     /**
@@ -265,7 +268,7 @@ class alignas(alignof(int *)) basic_string
      */
     constexpr const_pointer end_() const noexcept
     {
-        return is_short_() ? short_stor_().begin() + short_size() : long_stor_().end_;
+        return is_short_() ? short_str_().begin() + short_size() : long_str_().end_;
     }
 
     /**
@@ -273,7 +276,7 @@ class alignas(alignof(int *)) basic_string
      */
     constexpr pointer end_() noexcept
     {
-        return is_short_() ? short_stor_().begin() + short_size() : long_stor_().end_;
+        return is_short_() ? short_str_().begin() + short_size() : long_str_().end_;
     }
 
   public:
@@ -380,7 +383,7 @@ class alignas(alignof(int *)) basic_string
 #endif
         }
 
-        friend class basic_string;
+        friend typename basic_string;
 
       public:
         iterator_type_() noexcept = default;
@@ -574,7 +577,7 @@ class alignas(alignof(int *)) basic_string
      */
     constexpr ls_type_ allocate_(size_type cap, size_type size)
     {
-#if defined(__cpp_lib_allocate_at_least) && (__cpp_lib_allocate_at_least >= 202302L)
+#if defined(_cpp_lib_allocate_at_least) && (_cpp_lib_allocate_at_least >= 202302L)
         auto const [ptr, count] = atraits_t_::allocate_at_least(allocator_, cap + 1uz /* null terminator */);
         return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + count - 1uz /* null terminator */};
 #else
@@ -591,7 +594,8 @@ class alignas(alignof(int *)) basic_string
     constexpr void dealloc_(bool is_long, ls_type_ const &ls) noexcept
     {
         if (is_long)
-            atraits_t_::deallocate(allocator_, ls.begin_, ls.last_ - ::std::to_address(ls.begin_) + 1uz /* null terminator */);
+            atraits_t_::deallocate(allocator_, ls.begin_,
+                                   ls.last_ - ::std::to_address(ls.begin_) + 1uz /* null terminator */);
     }
 
     /**
@@ -642,8 +646,8 @@ class alignas(alignof(int *)) basic_string
         {
             auto const ls = allocate_(new_size, new_size);
             ::std::ranges::copy(first, last, ls.begin_);
-            dealloc_(is_long, long_stor_());
-            long_stor_(ls);
+            dealloc_(is_long, long_str_());
+            long_str_(ls);
         }
     }
 
@@ -675,8 +679,8 @@ class alignas(alignof(int *)) basic_string
             ::std::ranges::copy(begin, begin + index, ls.begin());
             ::std::ranges::copy(begin + index, end, ls.begin + index + length);
             ::std::ranges::copy(first, last, ls.begin() + index);
-            dealloc_(is_long, long_stor_());
-            long_stor_(ls);
+            dealloc_(is_long, long_str_());
+            long_str_(ls);
         }
     }
 
@@ -708,8 +712,8 @@ class alignas(alignof(int *)) basic_string
             ::std::ranges::copy(begin, begin + pos, ls.begin_);
             ::std::ranges::copy(first, last, ls.begin() + pos);
             ::std::ranges::copy(begin + pos + count, end, ls.begin() + pos + count);
-            dealloc_(is_long, long_stor_());
-            long_stor_(ls);
+            dealloc_(is_long, long_str_());
+            long_str_(ls);
         }
     }
 
@@ -722,8 +726,8 @@ class alignas(alignof(int *)) basic_string
         auto const is_long = is_long_();
         auto const ls = allocate_(new_cap, size);
         ::std::ranges::copy(begin, end, ls.begin_);
-        dealloc_(is_long, long_stor_());
-        long_stor_(ls);
+        dealloc_(is_long, long_str_());
+        long_str_(ls);
     }
 
   public:
@@ -831,7 +835,7 @@ class alignas(alignof(int *)) basic_string
     {
         if (short_str_max_ >= n)
         {
-            long_stor_(allocate_(n, n));
+            long_str_(allocate_(n, n));
         }
         else
         {
@@ -881,7 +885,7 @@ class alignas(alignof(int *)) basic_string
     {
     }
 
-    template <class U, class V>
+    template <typename U, typename V>
         requires ::std::input_iterator<U>
     constexpr basic_string(U first, V last, const Allocator &alloc = Allocator()) : allocator_(alloc)
     {
@@ -926,13 +930,13 @@ class alignas(alignof(int *)) basic_string
 
             stor_ = other.stor_;
             resize_shrink_(other.is_long_(), count);
-            other.short_stor(0uz);
+            other.short_str_(0uz);
         }
         else
         {
             construct_(other.size_());
             ::std::ranges::copy(other.begin_() + pos, other.begin_() + pos + count, begin_());
-            other.dealloc_(other.is_long_(), other.long_stor_());
+            other.dealloc_(other.is_long_(), other.long_str_());
         }
     }
 
@@ -960,7 +964,7 @@ class alignas(alignof(int *)) basic_string
     }
 
     // clang-format off
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     constexpr basic_string(const StringViewLike& t, allocator_type const& a = allocator_type())
 	     : basic_string(::std::basic_string_view<CharT, Traits>{ t }.begin(), ::std::basic_string_view<CharT, Traits>{ t }.size(), a)
@@ -969,7 +973,7 @@ class alignas(alignof(int *)) basic_string
 
     // clang-format on
 
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>
     constexpr basic_string(const StringViewLike &t, size_type pos, size_type n,
                            allocator_type const &a = allocator_type())
@@ -985,9 +989,9 @@ class alignas(alignof(int *)) basic_string
         ::std::ranges::copy(sv.data() + pos, sv.data() + pos + n, begin_());
     }
 
-#if defined(__cpp_lib_containers_ranges) && (__cpp_lib_containers_ranges >= 202202L)
+#if defined(_cpp_lib_containers_ranges) && (_cpp_lib_containers_ranges >= 202202L)
     // tagged constructors to construct from container compatible range
-    template <class R>
+    template <typename R>
         requires ::std::ranges::range<R> && requires {
             typename R::value_type;
             requires ::std::same_as<typename R::value_type, CharT>;
@@ -1012,7 +1016,7 @@ class alignas(alignof(int *)) basic_string
 
     // ********************************* begin append ******************************
 
-    template <class InputIt>
+    template <typename InputIt>
         requires ::std::input_iterator<InputIt>
     constexpr basic_string &append(InputIt first, InputIt last)
     {
@@ -1044,7 +1048,7 @@ class alignas(alignof(int *)) basic_string
   private:
     constexpr void copy_ator_and_move(basic_string &str) noexcept
     {
-        dealloc_(is_long_(), long_stor_());
+        dealloc_(is_long_(), long_str_());
         stor_.ls_ = str.stor_.ls_;
         size_flag_ = str.size_flag_;
         str.stor_.ls_ = ls_type_();
@@ -1122,7 +1126,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class InputIt>
+    template <typename InputIt>
         requires ::std::input_iterator<InputIt>
     constexpr basic_string &assign(InputIt first, InputIt last)
     {
@@ -1147,7 +1151,7 @@ class alignas(alignof(int *)) basic_string
     }
 
     // clang-format off
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     basic_string& assign(const StringViewLike& t)
     {
@@ -1157,7 +1161,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     constexpr basic_string& assign(const StringViewLike& t, size_type pos, size_type count = npos)
     {
@@ -1209,7 +1213,7 @@ class alignas(alignof(int *)) basic_string
     }
 
     // clang-format off
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     constexpr basic_string& operator=(const StringViewLike& t)
     {
@@ -1320,8 +1324,8 @@ class alignas(alignof(int *)) basic_string
             auto const ls = allocate_(new_size, new_size);
             ::std::ranges::copy(begin, end, ls.begin());
             ::std::ranges::copy(first, last, ls.begin() + size);
-            dealloc_(is_long, long_stor_());
-            long_stor(ls);
+            dealloc_(is_long, long_str_());
+            long_str_(ls);
         }
     }
 
@@ -1378,7 +1382,7 @@ class alignas(alignof(int *)) basic_string
     }
 
     // clang-format off
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     constexpr basic_string& append(const StringViewLike& t)
     {
@@ -1388,7 +1392,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     constexpr basic_string& append(const StringViewLike& t, size_type pos, size_type count = npos)
     {
@@ -1407,7 +1411,7 @@ class alignas(alignof(int *)) basic_string
     // ********************************* begin operator+= ******************************
 
     // clang-format off
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
     constexpr basic_string& operator+=(const StringViewLike& t)
     {
@@ -1475,7 +1479,7 @@ class alignas(alignof(int *)) basic_string
         return length <= size_() && equal_(s, s + length, end_() - length, end_());
     }
 
-#if defined(__cpp_lib_string_contains) && (__cpp_lib_string_contains >= 202011L)
+#if defined(_cpp_lib_string_contains) && (_cpp_lib_string_contains >= 202011L)
     constexpr bool contains(::std::basic_string_view<CharT, Traits> sv) const noexcept
     {
         return ::std::basic_string_view<CharT, Traits>{begin_(), end_()}.contains(sv);
@@ -1521,8 +1525,8 @@ class alignas(alignof(int *)) basic_string
             std::ranges::copy(begin, begin + index, ls.begin());
             std::ranges::copy(begin + index, end, ls.begin() + index + count);
             std::ranges::fill(ls.begin() + index, ls.begin() + index + count, ch);
-            dealloc_(is_long, long_stor_());
-            long_stor(ls);
+            dealloc_(is_long, long_str_());
+            long_str_(ls);
         }
 
         return *this;
@@ -1593,7 +1597,7 @@ class alignas(alignof(int *)) basic_string
 #endif
     }
 
-    template <class InputIt>
+    template <typename InputIt>
         requires ::std::input_iterator<InputIt>
     constexpr iterator insert(const_iterator pos, InputIt first, InputIt last)
     {
@@ -1632,7 +1636,7 @@ class alignas(alignof(int *)) basic_string
     }
 
     // clang-format off
-        template <class StringViewLike>
+        template <typename StringViewLike>
             requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& insert(size_type pos, const StringViewLike& t)
         {
@@ -1642,7 +1646,7 @@ class alignas(alignof(int *)) basic_string
             return *this;
         }
 
-        template <class StringViewLike>
+        template <typename StringViewLike>
             requires ::std::is_convertible_v<const StringViewLike&, ::std::basic_string_view<CharT, Traits>> && (!::std::is_convertible_v<const StringViewLike&, const CharT*>)
         constexpr basic_string& insert(size_type pos, const StringViewLike& t, size_type t_index, size_type count = npos)
         {
@@ -1793,7 +1797,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>> &&
                  (!::std::is_convertible_v<const StringViewLike &, const CharT *>)
     constexpr basic_string &replace(size_type pos, size_type count, const StringViewLike &t)
@@ -1804,7 +1808,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>> &&
                  (!::std::is_convertible_v<const StringViewLike &, const CharT *>)
     constexpr basic_string &replace(const_iterator first, const_iterator last, const StringViewLike &t)
@@ -1819,7 +1823,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class StringViewLike>
+    template <typename StringViewLike>
         requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>> &&
                  (!::std::is_convertible_v<const StringViewLike &, const CharT *>)
     constexpr basic_string &replace(size_type pos, size_type count, const StringViewLike &t, size_type pos2,
@@ -1864,8 +1868,8 @@ class alignas(alignof(int *)) basic_string
             ::std::ranges::copy(begin, begin + pos, ls.begin());
             ::std::ranges::copy(begin + pos + count, end, ls.begin() + pos + count2);
             ::std::ranges::fill(ls.begin() + pos, ls.begin() + pos + count2, ch);
-            dealloc_(is_long, long_stor_());
-            long_stor(ls);
+            dealloc_(is_long, long_str_());
+            long_str_(ls);
         }
 
         return *this;
@@ -1878,7 +1882,7 @@ class alignas(alignof(int *)) basic_string
         return *this;
     }
 
-    template <class InputIt>
+    template <typename InputIt>
     constexpr basic_string &replace(const_iterator first, const_iterator last, InputIt first2, InputIt last2)
         requires ::std::input_iterator<InputIt>
     {
