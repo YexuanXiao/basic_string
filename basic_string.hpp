@@ -33,15 +33,37 @@ class alignas(alignof(int *)) basic_string
                   ::std::is_same_v<char8_t, CharT> || ::std::is_same_v<char16_t, CharT> ||
                   ::std::is_same_v<char32_t, CharT>);
 
+  public:
+    using traits_type = Traits;
+    using value_type = CharT;
+    using allocator_type = Allocator;
+    using size_type = typename ::std::allocator_traits<Allocator>::size_type;
+    using difference_type = typename ::std::allocator_traits<Allocator>::difference_type;
+    using reference = value_type &;
+    using const_reference = value_type const &;
+    using pointer = typename ::std::allocator_traits<Allocator>::pointer;
+    using const_pointer = typename ::std::allocator_traits<Allocator>::const_pointer;
+
+    static inline constexpr size_type npos = size_type(-1);
+
   private:
     /**
      * @brief type of long string
      */
     struct ls_type_
     {
-        CharT *begin_{};
+        pointer begin_{};
         CharT *end_{};
         CharT *last_{};
+
+        constexpr auto begin() const noexcept
+        {
+            return ::std::to_address(begin_);
+        }
+        constexpr auto end() const noexcept
+        {
+            return ::std::to_address(end_);
+        }
     };
 
     // -2 is due to the null terminator and size_flag
@@ -78,7 +100,7 @@ class alignas(alignof(int *)) basic_string
      * @brief If the string migrates from short to long, then any operation other than
      * @brief move and shrink_to_fit will not make it revert back to short
      */
-    alignas(alignof(CharT)) unsigned char size_flag_{};
+    alignas(CharT) unsigned char size_flag_{};
 
     // sizeof(basic_string<T>) is always equal to sizeof(void*) * 4
 
@@ -120,6 +142,11 @@ class alignas(alignof(int *)) basic_string
         return stor_.ls_;
     }
 
+    constexpr auto &short_stor_() const noexcept
+    {
+        return stor_.ss_;
+    }
+
     /**
      * @brief convert to long string and set the flag
      */
@@ -127,21 +154,17 @@ class alignas(alignof(int *)) basic_string
     {
         long_stor_() = ls;
         size_flag_ = static_cast<unsigned char>(-1);
-        *ls.end_ = CharT{};
+        *ls.end() = CharT{};
     }
 
     /**
      * @brief convert to short string and resize
      */
-    constexpr void short_stor(::std::size_t size) noexcept
+    constexpr void short_stor(size_type size) noexcept
     {
-        stor_.ss_ = decltype(stor_.ss_)();
+        stor_.ss_ = decltype(stor_.ss_){};
         size_flag_ = static_cast<unsigned char>(size);
-    }
-
-    constexpr auto &short_stor_() const noexcept
-    {
-        return stor_.ss_;
+        *short_stor_()[size] = CharT{};
     }
 
     constexpr bool is_long_() const noexcept
@@ -154,12 +177,12 @@ class alignas(alignof(int *)) basic_string
         return !is_long_();
     }
 
-    constexpr void resize_shrink_(bool is_long, ::std::size_t n) noexcept
+    constexpr void resize_shrink_(bool is_long, size_type n) noexcept
     {
         if (is_long)
         {
-            stor_.ls_.end_ = stor_.ls_.begin_ + n;
-            *stor_.ls_.end_ = CharT{};
+            stor_.ls_.end() = stor_.ls_.begin() + n;
+            *stor_.ls_.end() = CharT{};
         }
         else
         {
@@ -168,39 +191,26 @@ class alignas(alignof(int *)) basic_string
         }
     }
 
-    constexpr ::std::size_t size_() const noexcept
+    constexpr size_type size_() const noexcept
     {
-        return is_short_() ? size_flag_ : long_stor_().end_ - long_stor_().begin_;
+        return is_short_() ? size_flag_ : long_stor_().end() - long_stor_().begin();
     }
 
-  public:
-    using traits_type = Traits;
-    using value_type = CharT;
-    using allocator_type = Allocator;
-    using size_type = typename ::std::allocator_traits<Allocator>::size_type;
-    using difference_type = typename ::std::allocator_traits<Allocator>::difference_type;
-    using reference = value_type &;
-    using const_reference = value_type const &;
-    using pointer = typename ::std::allocator_traits<Allocator>::pointer;
-    using const_pointer = typename ::std::allocator_traits<Allocator>::const_pointer;
-
-    static inline constexpr size_type npos = size_type(-1);
-
     // ********************************* begin volume ******************************
-
-    constexpr ::std::size_t size() const noexcept
+  public:
+    constexpr size_type size() const noexcept
     {
         return size_();
     }
 
-    constexpr ::std::size_t length() const noexcept
+    constexpr size_type length() const noexcept
     {
         return size_();
     }
 
     constexpr bool empty() const noexcept
     {
-        return !size_();
+        return size_flag_ == 0u || long_stor_().end() == long_stor_().begin();
     }
 
     /**
@@ -213,7 +223,7 @@ class alignas(alignof(int *)) basic_string
 
     constexpr size_type capacity() const noexcept
     {
-        return is_short_() ? short_str_max_ : long_stor_().last_ - long_stor_().begin_;
+        return is_short_() ? short_str_max_ : long_stor_().last_ - long_stor_().begin();
     }
 
     /**
@@ -226,7 +236,7 @@ class alignas(alignof(int *)) basic_string
             // copy to local
             auto const ls = long_stor_();
             short_stor(size_());
-            ::std::ranges::copy(ls.begin_, ls.end_ + 1uz /* null terminator */, short_stor_().data());
+            ::std::ranges::copy(ls.begin_, ls.end_, short_stor_().data());
             dealloc_(true, ls);
         }
     }
@@ -237,7 +247,7 @@ class alignas(alignof(int *)) basic_string
     /**
      * @return a pointer to the first element
      */
-    constexpr CharT const *begin_() const noexcept
+    constexpr const_pointer begin_() const noexcept
     {
         return is_short_() ? short_stor_().begin() : long_stor_().begin_;
     }
@@ -245,7 +255,7 @@ class alignas(alignof(int *)) basic_string
     /**
      * @return a pointer to the first element
      */
-    constexpr CharT *begin_() noexcept
+    constexpr pointer begin_() noexcept
     {
         return is_short_() ? short_stor_().begin() : long_stor_().begin_;
     }
@@ -253,7 +263,7 @@ class alignas(alignof(int *)) basic_string
     /**
      * @return a pointer to the next position of the last element
      */
-    constexpr CharT const *end_() const noexcept
+    constexpr const_pointer end_() const noexcept
     {
         return is_short_() ? short_stor_().begin() + short_size() : long_stor_().end_;
     }
@@ -261,23 +271,23 @@ class alignas(alignof(int *)) basic_string
     /**
      * @return a pointer to the next position of the last element
      */
-    constexpr CharT *end_() noexcept
+    constexpr pointer end_() noexcept
     {
         return is_short_() ? short_stor_().begin() + short_size() : long_stor_().end_;
     }
 
   public:
-    constexpr CharT const *data() const noexcept
+    constexpr const_pointer data() const noexcept
     {
         return begin_();
     }
 
-    constexpr CharT *data() noexcept
+    constexpr pointer data() noexcept
     {
         return begin_();
     }
 
-    constexpr CharT const *c_str() const noexcept
+    constexpr const_pointer c_str() const noexcept
     {
         return begin_();
     }
@@ -301,31 +311,33 @@ class alignas(alignof(int *)) basic_string
 
     constexpr reference operator[](size_type pos) noexcept
     {
-        return const_cast<CharT &>(const_cast<basic_string const &>(*this)[pos]);
+        assert(("pos >= size.", pos < size_()));
+
+        return *(begin_() + pos);
     }
 
-    constexpr const CharT &front() const noexcept
+    constexpr const_reference front() const noexcept
     {
         assert(("string is empty.", !empty()));
 
         return *begin_();
     }
 
-    constexpr CharT &front()
+    constexpr reference front()
     {
         assert(("string is empty.", !empty()));
 
         return *begin_();
     }
 
-    constexpr const CharT &back() const noexcept
+    constexpr const_reference back() const noexcept
     {
         assert(("string is empty", !empty()));
 
         return *(end_() - 1uz);
     }
 
-    constexpr CharT &back()
+    constexpr reference back()
     {
         assert(("string is empty", !empty()));
 
@@ -334,7 +346,7 @@ class alignas(alignof(int *)) basic_string
 
     constexpr operator ::std::basic_string_view<CharT, Traits>() const noexcept
     {
-        return ::std::basic_string_view<CharT, Traits>(begin_(), end_());
+        return {begin_(), end_()};
     }
 
     // ********************************* begin iterator type ******************************
@@ -564,10 +576,10 @@ class alignas(alignof(int *)) basic_string
     {
 #if defined(__cpp_lib_allocate_at_least) && (__cpp_lib_allocate_at_least >= 202302L)
         auto const [ptr, count] = atraits_t_::allocate_at_least(allocator_, cap + 1uz /* null terminator */);
-        return {ptr, ptr + size, ptr + count - 1uz /* null terminator */};
+        return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + count - 1uz /* null terminator */};
 #else
         auto const ptr = atraits_t_::allocate(allocator_, cap + 1uz /* null terminator */);
-        return {ptr, ptr + size, ptr + cap};
+        return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + cap};
 #endif
     }
 
@@ -579,7 +591,7 @@ class alignas(alignof(int *)) basic_string
     constexpr void dealloc_(bool is_long, ls_type_ const &ls) noexcept
     {
         if (is_long)
-            atraits_t_::deallocate(allocator_, ls.begin_, ls.last_ - ls.begin_ + 1uz /* null terminator */);
+            atraits_t_::deallocate(allocator_, ls.begin_, ls.last_ - ::std::to_address(ls.begin_) + 1uz /* null terminator */);
     }
 
     /**
@@ -660,9 +672,9 @@ class alignas(alignof(int *)) basic_string
         else
         {
             auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, begin + index, ls.begin_);
+            ::std::ranges::copy(begin, begin + index, ls.begin());
             ::std::ranges::copy(begin + index, end, ls.begin + index + length);
-            ::std::ranges::copy(first, last, ls.begin_ + index);
+            ::std::ranges::copy(first, last, ls.begin() + index);
             dealloc_(is_long, long_stor_());
             long_stor_(ls);
         }
@@ -694,8 +706,8 @@ class alignas(alignof(int *)) basic_string
         {
             auto const ls = allocate_(new_size, new_size);
             ::std::ranges::copy(begin, begin + pos, ls.begin_);
-            ::std::ranges::copy(first, last, ls.begin_ + pos);
-            ::std::ranges::copy(begin + pos + count, end, ls.begin_ + pos + count);
+            ::std::ranges::copy(first, last, ls.begin() + pos);
+            ::std::ranges::copy(begin + pos + count, end, ls.begin() + pos + count);
             dealloc_(is_long, long_stor_());
             long_stor_(ls);
         }
@@ -1306,8 +1318,8 @@ class alignas(alignof(int *)) basic_string
         else
         {
             auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, end, ls.begin_);
-            ::std::ranges::copy(first, last, ls.begin_ + size);
+            ::std::ranges::copy(begin, end, ls.begin());
+            ::std::ranges::copy(first, last, ls.begin() + size);
             dealloc_(is_long, long_stor_());
             long_stor(ls);
         }
@@ -1506,9 +1518,9 @@ class alignas(alignof(int *)) basic_string
         else
         {
             auto const ls = allocate_(new_size, new_size);
-            std::ranges::copy(begin, begin + index, ls.begin_);
-            std::ranges::copy(begin + index, end, ls.begin_ + index + count);
-            std::ranges::fill(ls.begin_ + index, ls.begin_ + index + count, ch);
+            std::ranges::copy(begin, begin + index, ls.begin());
+            std::ranges::copy(begin + index, end, ls.begin() + index + count);
+            std::ranges::fill(ls.begin() + index, ls.begin() + index + count, ch);
             dealloc_(is_long, long_stor_());
             long_stor(ls);
         }
@@ -1849,9 +1861,9 @@ class alignas(alignof(int *)) basic_string
         else
         {
             auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, begin + pos, ls.begin_);
-            ::std::ranges::copy(begin + pos + count, end, ls.begin_ + pos + count2);
-            ::std::ranges::fill(ls.begin_ + pos, ls.begin_ + pos + count2, ch);
+            ::std::ranges::copy(begin, begin + pos, ls.begin());
+            ::std::ranges::copy(begin + pos + count, end, ls.begin() + pos + count2);
+            ::std::ranges::fill(ls.begin() + pos, ls.begin() + pos + count2, ch);
             dealloc_(is_long, long_stor_());
             long_stor(ls);
         }
