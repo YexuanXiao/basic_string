@@ -1989,6 +1989,59 @@ class alignas(CharT *) basic_string
         reserve(count);
         resize_shrink_(is_long_(), std::move(op)(begin_(), count));
     }
+
+    constexpr operator ::std::string_view<CharT, Traits>() noexcept
+    {
+        return {begin_(), end_()};
+    }
+
+    template <class CharT, class Traits, class Alloc>
+    friendconstexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+        const bizwen::basic_string<CharT, Traits, Alloc> &lhs,
+        std::type_identity_t<::std::basic_string_view<CharT, Traits>> rhs)
+    {
+        bizwen::basic_string<CharT, Traits, Allocator> r{
+            std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.allocator_)};
+        r.reserve(lhs.size() + rhs.size());
+        r.append(lhs);
+        r.append(rhs);
+
+        return r;
+    }
+
+    template <class CharT, class Traits, class Alloc>
+    friend constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+        std::type_identity_t<std::basic_string_view<CharT, Traits>> lhs,
+        const bizwen::basic_string<CharT, Traits, Alloc> &rhs)
+    {
+        bizwen::basic_string<CharT, Traits, Allocator> r{
+            std::allocator_traits<Alloc>::select_on_container_copy_construction(rhs.allocator_)};
+        r.reserve(lhs.size() + rhs.size());
+        r.append(lhs);
+        r.append(rhs);
+
+        return r;
+    }
+
+    template <class CharT, class Traits, class Alloc>
+    friend constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+        bizwen::basic_string<CharT, Traits, Alloc> &&lhs,
+        std::type_identity_t<std::basic_string_view<CharT, Traits>> rhs)
+    {
+        lhs.append(rhs);
+
+        return std::move(lhs);
+    }
+
+    template <class CharT, class Traits, class Alloc>
+    friend constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+        std::type_identity_t<std::basic_string_view<CharT, Traits>> lhs,
+        bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
+    {
+        rhs.insert(0uz, lhs);
+
+        return std::move(rhs);
+    }
 };
 
 using string = bizwen::basic_string<char8_t>;
@@ -2004,3 +2057,15 @@ static_assert(sizeof(u16string) == sizeof(char8_t *) * 4);
 static_assert(sizeof(u32string) == sizeof(char8_t *) * 4);
 static_assert(::std::contiguous_iterator<string::iterator>);
 } // namespace bizwen
+
+template <typename CharT, typename Traits，typename Allocator>
+struct ::std::hash<bizwen::basic_string<CharT, Traits, Allocator>>
+{
+    ::std::size_t operator()(bizwen::basic_string<CharT, Traits, Allocator> const &str) static noexcept
+    {
+        using view = ::std::string_view<CharT, Traits>;
+        ::std::hash<view> hasher;
+
+        return hasher(view(str));
+    }
+};
