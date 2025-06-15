@@ -341,36 +341,42 @@ class alignas(CharT *) basic_string
     constexpr const_reference operator[](size_type pos) const noexcept
     {
         assert(pos <= size_());
+
         return *(begin_() + pos);
     }
 
     constexpr reference operator[](size_type pos) noexcept
     {
         assert(pos <= size_());
+
         return *(begin_() + pos);
     }
 
     constexpr const_reference front() const noexcept
     {
         assert(!empty());
+
         return *begin_();
     }
 
     constexpr reference front()
     {
         assert(!empty());
+
         return *begin_();
     }
 
     constexpr const_reference back() const noexcept
     {
         assert(!empty());
+
         return *(end_() - 1uz);
     }
 
     constexpr reference back()
     {
         assert(!empty());
+
         return *(end_() - 1uz);
     }
 
@@ -642,9 +648,7 @@ class alignas(CharT *) basic_string
         if consteval
         {
             for (auto i = 0uz; i != cap + 1uz; ++i)
-            {
                 ::std::construct_at(&ptr[i]);
-            }
         }
 
         return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + count - 1uz /* null terminator */};
@@ -655,9 +659,7 @@ class alignas(CharT *) basic_string
         if consteval
         {
             for (auto i = 0uz; i != cap + 1uz; ++i)
-            {
                 ::std::construct_at(&ptr[i]);
-            }
         }
 
         return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + cap};
@@ -772,7 +774,6 @@ class alignas(CharT *) basic_string
             throw out_of_range();
 
         count = ::std::ranges::min(size_() - pos, count);
-
         auto const length = static_cast<size_type>(last - first);
         auto const new_size = size_() - count + length;
         auto const begin = begin_();
@@ -910,13 +911,9 @@ class alignas(CharT *) basic_string
     constexpr void swap(basic_string &other) noexcept
     {
         if constexpr (atraits_t_::propagate_on_container_swap::value)
-        {
             ::std::ranges::swap(other.allocator_, other.allocator_);
-        }
         else
-        {
             assert(other.allocator_ == allocator_);
-        }
 
         other.swap_without_ator(*this);
     }
@@ -931,13 +928,9 @@ class alignas(CharT *) basic_string
     constexpr void construct_(::std::size_t n)
     {
         if (short_str_max_ < n)
-        {
             long_str_(allocate_(n, n));
-        }
         else
-        {
             resize_shrink_(false, n);
-        }
     }
 
   public:
@@ -1090,7 +1083,6 @@ class alignas(CharT *) basic_string
             throw out_of_range();
 
         count = ::std::ranges::min(other.size_() - pos, count);
-
         construct_(count);
         ::std::ranges::copy(other.begin_() + pos, other.begin_() + pos + count, begin_());
     }
@@ -1333,21 +1325,17 @@ class alignas(CharT *) basic_string
                 return ::std::strong_ordering::less;
         }
 
-        if (lsize > rsize)
-            return ::std::strong_ordering::greater;
-        else if (lsize < rsize)
-            return ::std::strong_ordering::less;
-
-        return ::std::strong_ordering::equal;
+        return lsize <=> rsize;
     }
 
     friend constexpr ::std::strong_ordering operator<=>(basic_string const &lhs, CharT const *rhs) noexcept
     {
-        auto start = rhs;
-        auto const rsize = basic_string::c_string_length_(start);
+
+        auto const rsize = basic_string::c_string_length_(rhs);
         auto const lsize = lhs.size_();
 
-        for (auto begin = lhs.begin_(), end = begin + ::std::ranges::min(lsize, rsize); begin != end; ++begin, ++start)
+        for (auto begin = lhs.begin_(), end = begin + ::std::ranges::min(lsize, rsize), start = rhs; begin != end;
+             ++begin, ++start)
         {
             if (*begin > *start)
                 return ::std::strong_ordering::greater;
@@ -1355,12 +1343,7 @@ class alignas(CharT *) basic_string
                 return ::std::strong_ordering::less;
         }
 
-        if (lsize > rsize)
-            return ::std::strong_ordering::greater;
-        else if (lsize < rsize)
-            return ::std::strong_ordering::less;
-        else
-            return ::std::strong_ordering::equal;
+        return lsize <=> rsize;
     }
 
   private:
@@ -1374,9 +1357,7 @@ class alignas(CharT *) basic_string
             for (; begin != end; ++begin, ++first)
             {
                 if (*first != *begin)
-                {
                     return false;
-                }
             }
 
             return true;
@@ -1497,7 +1478,6 @@ class alignas(CharT *) basic_string
             throw out_of_range();
 
         count = ::std::ranges::min(str.size_() - pos, count);
-
         append_(str.begin_() + pos, str.begin_() + pos + count);
 
         return *this;
@@ -1774,7 +1754,6 @@ class alignas(CharT *) basic_string
     constexpr iterator insert(const_iterator pos, ::std::initializer_list<CharT> ilist)
     {
         auto const index = pos.base().current_ - begin_();
-
         insert_(index, ilist.begin(), ilist.begin() + ilist.size());
 
 #ifndef NDEBUG
@@ -2272,11 +2251,11 @@ using u8string = bizwen::basic_string<char8_t>;
 using u16string = bizwen::basic_string<char16_t>;
 using u32string = bizwen::basic_string<char32_t>;
 
-static_assert(sizeof(string) == sizeof(char8_t *) * 4);
-static_assert(sizeof(wstring) == sizeof(char8_t *) * 4);
-static_assert(sizeof(u8string) == sizeof(char8_t *) * 4);
-static_assert(sizeof(u16string) == sizeof(char8_t *) * 4);
-static_assert(sizeof(u32string) == sizeof(char8_t *) * 4);
+static_assert(sizeof(string) == sizeof(char8_t *) * 4uz);
+static_assert(sizeof(wstring) == sizeof(char8_t *) * 4uz);
+static_assert(sizeof(u8string) == sizeof(char8_t *) * 4uz);
+static_assert(sizeof(u16string) == sizeof(char8_t *) * 4uz);
+static_assert(sizeof(u32string) == sizeof(char8_t *) * 4uz);
 static_assert(::std::contiguous_iterator<string::iterator>);
 } // namespace bizwen
 
