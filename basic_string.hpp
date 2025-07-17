@@ -1,4 +1,9 @@
-#pragma once
+// Copyright 2023-2025 YexuanXiao
+// Distributed under the MIT License.
+// https://github.com/YexuanXiao/basic_string
+
+#if !defined(BIZWEN_BASIC_STRING_HPP)
+#define BIZWEN_BASIC_STRING_HPP
 
 #include <algorithm>
 #include <array>
@@ -2291,3 +2296,5 @@ struct hash<bizwen::basic_string<CharT, Traits, Allocator>>
     }
 };
 } // namespace std
+
+#endif
