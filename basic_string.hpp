@@ -6,7 +6,6 @@
 #define BIZWEN_BASIC_STRING_HPP
 
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <compare>
 #include <concepts>
@@ -16,43 +15,265 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <memory_resource>
 #include <ranges>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <memory_resource>
 #include <version>
 
-#if !defined(__cpp_if_consteval) || (__cpp_if_consteval < 202106L)
-#error "requires __cpp_if_consteval"
-#endif
-
-#if !defined(__cpp_size_t_suffix) || (__cpp_size_t_suffix < 202011L)
-#error "requires __cpp_size_t_suffix"
+// if consteval
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(push)
+#pragma warning(disable : 5282)
+#elif defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++23-extensions"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wc++23-extensions"
 #endif
 
 namespace bizwen
 {
-template <typename CharT, typename Traits = ::std::char_traits<CharT>, typename Allocator = ::std::allocator<CharT>>
-class alignas(CharT *) basic_string
+
+template <typename CharT, typename Traits = ::std::char_traits<CharT>, typename Alloc = ::std::allocator<CharT>>
+class basic_string;
+
+namespace string_detail
 {
-    static_assert(::std::is_same_v<char, CharT> || ::std::is_same_v<wchar_t, CharT> ||
-                  ::std::is_same_v<char8_t, CharT> || ::std::is_same_v<char16_t, CharT> ||
-                  ::std::is_same_v<char32_t, CharT>);
-    static_assert(::std::is_same_v<Traits, ::std::char_traits<CharT>>);
+template <typename T, typename A>
+class string_iterator
+{
+    using CharT = ::std::remove_const_t<T>;
+    using Traits = typename ::std::char_traits<CharT>;
+    friend class ::bizwen::basic_string<CharT, Traits, A>;
+    friend string_iterator<T const, A>;
+    friend string_iterator<CharT, A>;
+
+  public:
+    using difference_type = typename ::std::allocator_traits<A>::difference_type;
+    using value_type = CharT;
+    using pointer = T *;
+    using reference = T &;
+    using iterator_category = ::std::random_access_iterator_tag;
+    using iterator_concept = ::std::contiguous_iterator_tag;
+
+  private:
+    pointer current_{};
+
+#if !defined(NDEBUG)
+    CharT const *begin_{};
+    CharT const *end_{};
+#endif
+
+#if !defined(NDEBUG)
+    // Call after iteration.
+    constexpr bool verify() const noexcept
+    {
+        assert(current_ >= begin_ && current_ <= end_);
+        return true;
+    }
+#endif
+
+  public:
+    string_iterator() noexcept = default;
+    string_iterator(string_iterator const &) noexcept = default;
+    string_iterator &operator=(string_iterator const &) & noexcept = default;
+
+  private:
+#if !defined(NDEBUG)
+    constexpr string_iterator(T *current, CharT const *begin, CharT const *end) noexcept
+        : current_(current), begin_(begin), end_(end)
+    {
+    }
+#else
+    constexpr string_iterator(T *current) noexcept : current_(current)
+    {
+    }
+#endif
+
+  public:
+    constexpr string_iterator operator+(difference_type n) const & noexcept
+    {
+        auto temp = *this;
+        temp.current_ += n;
+        assert(temp.verify());
+
+        return temp;
+    }
+
+    constexpr string_iterator operator-(difference_type n) const & noexcept
+    {
+        auto temp = *this;
+        temp.current_ -= n;
+        assert(temp.verify());
+
+        return temp;
+    }
+
+    constexpr friend string_iterator operator+(difference_type n, string_iterator const &rhs) noexcept
+    {
+        auto temp = rhs;
+        temp.current_ += n;
+        assert(temp.verify());
+
+        return temp;
+    }
+
+    constexpr friend string_iterator operator-(difference_type n, string_iterator const &rhs) noexcept
+    {
+        auto temp = rhs;
+        temp.current_ -= n;
+        assert(temp.verify());
+
+        return temp;
+    }
+
+    constexpr friend difference_type operator-(string_iterator const &lhs, string_iterator const &rhs) noexcept
+    {
+#if !defined(NDEBUG)
+        assert(lhs.begin_ == rhs.begin_);
+#endif
+        return lhs.current_ - rhs.current_;
+    }
+
+    constexpr string_iterator &operator+=(difference_type n) & noexcept
+    {
+        current_ += n;
+        assert(verify());
+
+        return *this;
+    }
+
+    constexpr string_iterator &operator-=(difference_type n) & noexcept
+    {
+        current_ -= n;
+        assert(verify());
+
+        return *this;
+    }
+
+    constexpr string_iterator &operator++() & noexcept
+    {
+        ++current_;
+        assert(verify());
+
+        return *this;
+    }
+
+    constexpr string_iterator &operator--() & noexcept
+    {
+        --current_;
+        assert(verify());
+
+        return *this;
+    }
+
+    constexpr string_iterator operator++(int) & noexcept
+    {
+        auto temp = *this;
+        ++current_;
+        assert(verify());
+
+        return temp;
+    }
+
+    constexpr string_iterator operator--(int) & noexcept
+    {
+        auto temp = *this;
+        --current_;
+        assert(verify());
+
+        return temp;
+    }
+
+    constexpr T &operator[](difference_type n) const noexcept
+    {
+#if !defined(NDEBUG)
+        auto end = (*this) + n;
+        assert(end.verify());
+#endif
+        return *(current_ + n);
+    }
+
+    constexpr auto &operator*() const noexcept
+    {
+        return *current_;
+    }
+
+    constexpr auto *operator->() const noexcept
+    {
+        return current_;
+    }
+
+#if !defined(NDEBUG)
+    friend constexpr ::std::strong_ordering operator<=>(string_iterator const &lhs, string_iterator const &rhs) noexcept
+    {
+        assert(lhs.begin_ == rhs.begin_);
+        return lhs.current_ <=> rhs.current_;
+    }
+
+    friend constexpr bool operator==(string_iterator const &lhs, string_iterator const &rhs) noexcept
+    {
+        assert(lhs.begin_ == rhs.begin_);
+        return lhs.current_ == rhs.current_;
+    }
+#else
+    friend constexpr ::std::strong_ordering operator<=>(string_iterator const &,
+                                                        string_iterator const &) noexcept = default;
+#endif
+
+    constexpr operator string_iterator<CharT const, A>() const
+        requires(!::std::is_const_v<T>)
+    {
+#if !defined(NDEBUG)
+        return {current_, begin_, end_};
+#else
+        return {current_};
+#endif
+    }
+};
+
+template <typename A>
+concept mini_alloc = requires(A &a) {
+    typename A::value_type;
+    a.allocate(0uz);
+};
+} // namespace string_detail
+
+template <typename CharT, typename Traits, typename Alloc>
+class basic_string
+{
+    static_assert(!::std::is_array_v<CharT>, "Character type of basic_string must not be an array");
+    static_assert(::std::is_trivially_copyable_v<CharT>,
+                  "Character type of basic_string must be trivially copyable");
+    static_assert(::std::is_trivially_default_constructible_v<CharT>,
+                  "Character type of basic_string must be trivially default constructible");
+    static_assert(::std::is_standard_layout_v<CharT>, "Character type of basic_string must be standard-layout");
+    static_assert(::std::is_same_v<CharT, typename Traits::char_type>,
+                  "Traits::char_type must be the same type as CharT");
+    static_assert(::std::is_same_v<CharT, typename Alloc::value_type>,
+                  "Allocator::value_type must be the same type as CharT");
+
+    using atraits_t_ = ::std::allocator_traits<Alloc>;
+
+    template <typename StringViewLike>
+    inline static constexpr bool is_svlike_v_ =
+        ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<CharT, Traits>> &&
+        (!::std::is_convertible_v<StringViewLike const &, CharT const *>);
 
   public:
     using traits_type = Traits;
     using value_type = CharT;
-    using allocator_type = Allocator;
-    using size_type = ::std::size_t;
-    using difference_type = ::std::ptrdiff_t;
+    using allocator_type = Alloc;
+    using size_type = typename atraits_t_::size_type;
+    using difference_type = typename atraits_t_::difference_type;
     using reference = value_type &;
     using const_reference = value_type const &;
-    using pointer = typename ::std::allocator_traits<Allocator>::pointer;
-    using const_pointer = typename ::std::allocator_traits<Allocator>::const_pointer;
+    using pointer = typename atraits_t_::pointer;
+    using const_pointer = typename atraits_t_::const_pointer;
 
     static inline constexpr size_type npos = size_type(-1);
 
@@ -81,22 +302,38 @@ class alignas(CharT *) basic_string
     /**
      * @brief short_str_max_ is the max length of short string
      */
-    static inline constexpr ::std::size_t short_str_max_{sizeof(CharT *) * 4uz / sizeof(CharT) - 2uz};
+    static inline constexpr ::std::size_t short_str_max_{std::max(sizeof(CharT *) * 3uz / sizeof(CharT), 4uz) - 2uz};
+
+    struct ss_type_
+    {
+        CharT buffer_[short_str_max_ + ::std::size_t(1) /* null terminator */]{};
+
+        constexpr auto data() const noexcept
+        {
+            return ::std::begin(buffer_);
+        }
+
+        constexpr auto data() noexcept
+        {
+            return ::std::begin(buffer_);
+        }
+    };
 
     /**
      * @brief union storage long string and short string
      */
 #pragma pack(push, 1)
     union storage_type_ {
-        ::std::array<CharT, short_str_max_ + 1uz /* null terminator */> ss_{};
+        ss_type_ ss_;
         ls_type_ ls_;
     };
 #pragma pack(pop)
     // https://github.com/microsoft/STL/issues/1364
 #if __has_cpp_attribute(msvc::no_unique_address)
-    [[msvc::no_unique_address]] Allocator allocator_{};
+    [[msvc::no_unique_address]] alignas(CharT *) Alloc allocator_{};
 #else
-    [[no_unique_address]] Allocator allocator_{};
+    // Using the alignment of the allocator to ensure the entire structure is properly aligned
+    [[no_unique_address]] alignas(CharT *) Alloc allocator_{};
 #endif
 
     /**
@@ -113,38 +350,33 @@ class alignas(CharT *) basic_string
      */
     alignas(CharT) unsigned char size_flag_{};
 
-    // sizeof(basic_string<T>) is always equal to sizeof(void*) * 4
+    // sizeof(basic_string<T, ::std::allocator>) is always equal to sizeof(void*) * 4
 
-    using atraits_t_ = ::std::allocator_traits<Allocator>;
-
-    /**
-     * @return ::std::out_of_range
-     */
-    static constexpr auto out_of_range() noexcept
+    [[noreturn]] static constexpr void throw_out_of_range_()
     {
-        return ::std::out_of_range("pos/index is out of range, please check it.");
+        throw ::std::out_of_range("pos/index is out of range, please check it.");
+    }
+
+    [[noreturn]] static constexpr void throw_length_error_()
+    {
+        throw ::std::length_error("string too long.");
     }
 
     /**
-     * @brief check if the two ranges overlap, and if overlap, new memory needs to allocate
+     * @brief check if the two ranges overlap, and if overlap, new memory needs to
+     * allocate
      **/
-    static constexpr bool overlap(CharT const *first_inner, CharT const *last_inner, CharT const *first_outer,
-                                  CharT const *last_outer) noexcept
+    static constexpr bool overlap_([[maybe_unused]] CharT const *first_inner, [[maybe_unused]] CharT const *last_inner,
+                                   [[maybe_unused]] CharT const *first_outer,
+                                   [[maybe_unused]] CharT const *last_outer) noexcept
     {
-        if !consteval
+        // [utilities.comparisons.general] strict total order over pointers.
+        if (::std::less{}(first_inner, first_outer) || !::std::less{}(first_inner, last_outer))
         {
-            // [utilities.comparisons.general] strict total order over pointers.
-            ::std::ranges::greater greater;
-            ::std::ranges::less less;
-
-            if (less(first_inner, first_outer) || greater(first_inner, last_outer))
-            {
-                assert(less(last_inner, first_outer) || greater(last_inner, last_outer));
-                // input range overlaps with *this but is larger
-                return false;
-            }
+            assert(::std::greater{}(first_outer, last_inner) || !::std::less{}(last_inner, last_outer));
+            // input range overlaps with *this but is larger
+            return false;
         }
-        // always assume overlap during constant evaluation
         return true;
     }
 
@@ -185,7 +417,7 @@ class alignas(CharT *) basic_string
     {
         stor_ = storage_type_{};
         size_flag_ = static_cast<unsigned char>(size);
-        short_str_()[size] = CharT{};
+        *(short_str_().data() + size) = CharT{};
     }
 
     constexpr bool is_long_() const noexcept
@@ -200,18 +432,17 @@ class alignas(CharT *) basic_string
 
     constexpr void resize_shrink_(bool is_long, size_type n) noexcept
     {
+        assert(is_long_() == is_long);
         if (is_long)
         {
-            assert(size_flag_ == static_cast<unsigned char>(-1));
             auto &ls = long_str_();
             ls.end_ = ls.begin() + n;
             *ls.end_ = CharT{};
         }
         else
         {
-            assert(size_flag_ != static_cast<unsigned char>(-1));
             size_flag_ = static_cast<unsigned char>(n);
-            short_str_()[size_flag_] = CharT{};
+            *(short_str_().data() + size_flag_) = CharT{};
         }
     }
 
@@ -220,7 +451,18 @@ class alignas(CharT *) basic_string
         return is_short_() ? size_flag_ : long_str_().end() - long_str_().begin();
     }
 
-    // ********************************* begin volume ******************************
+    constexpr ::std::basic_string_view<value_type, traits_type> view_() const noexcept
+    {
+        return {begin_(), end_()};
+    }
+
+    template <class Ordering>
+    static constexpr int order_to_int_(Ordering ord) noexcept
+    {
+        return ord < 0 ? -1 : (ord > 0 ? 1 : 0);
+    }
+
+    // ***************************** begin volume *****************************
   public:
     constexpr size_type size() const noexcept
     {
@@ -238,11 +480,13 @@ class alignas(CharT *) basic_string
     }
 
     /**
-     * @return size_type{ -1 } / sizeof(CharT) / 2uz - 1uz
+     * Useless function, its existence is only to pass pedantic tests, using it is just a waste of time
      */
     constexpr size_type max_size() const noexcept
     {
-        return size_type(-1) / sizeof(CharT) / 2uz - 1uz /* null terminator */;
+        return ::std::min(size_type(-1) / size_type(sizeof(CharT)) / size_type(2),
+                          static_cast<size_type>(atraits_t_::max_size(allocator_))) -
+               size_type(1) /* null terminator */;
     }
 
     constexpr size_type capacity() const noexcept
@@ -260,7 +504,7 @@ class alignas(CharT *) basic_string
             // copy to local
             auto const ls = long_str_();
             short_str_(size_());
-            ::std::ranges::copy(ls.begin(), ls.end(), short_str_().data());
+            ::std::copy(ls.begin(), ls.end(), short_str_().data());
             dealloc_(ls);
         }
     }
@@ -283,7 +527,7 @@ class alignas(CharT *) basic_string
         }
     };
 
-    // ********************************* begin element access ******************************
+    // ************************* begin element access *************************
 
   private:
     /**
@@ -336,12 +580,16 @@ class alignas(CharT *) basic_string
 
     constexpr const_reference at(size_type pos) const
     {
-        return pos < size_() ? *(begin_() + pos) : throw out_of_range();
+        if (pos < size_())
+            return *(begin_() + pos);
+        throw_out_of_range_();
     }
 
     constexpr reference at(size_type pos)
     {
-        return pos < size_() ? *(begin_() + pos) : throw out_of_range();
+        if (pos < size_())
+            return *(begin_() + pos);
+        throw_out_of_range_();
     }
 
     constexpr const_reference operator[](size_type pos) const noexcept
@@ -388,189 +636,24 @@ class alignas(CharT *) basic_string
 
     constexpr operator ::std::basic_string_view<value_type, traits_type>() const noexcept
     {
-        return {begin_(), end_()};
+        return view_();
     }
 
-    // ********************************* begin iterator type ******************************
-
-  private:
-    struct iterator_type_
-    {
-        using difference_type = ::std::ptrdiff_t;
-        using value_type = CharT;
-        using pointer = CharT *;
-        using reference = CharT &;
-        using iterator_category = ::std::random_access_iterator_tag;
-        using iterator_concept = ::std::contiguous_iterator_tag;
-
-      private:
-        pointer current_{};
-
-        // the C++ standard states that all iterators of string become invalid after move,
-        // so the address of the string can be stored directly.
-#ifndef NDEBUG
-        basic_string *target_{};
-#endif
-
-        // Call after iteration.
-        constexpr void check() const noexcept
-        {
-#ifndef NDEBUG
-            // if current_ is not nullptr, then target must not be nullptr.
-            assert(current_ && current_ <= target_->end_() && current_ >= target_->begin_());
-            // iterator is invalidated
-#endif
-        }
-
-        friend class basic_string;
-
-      public:
-        iterator_type_() noexcept = default;
-        iterator_type_(iterator_type_ const &) noexcept = default;
-        iterator_type_(iterator_type_ &&) noexcept = default;
-        iterator_type_ &operator=(iterator_type_ const &) & noexcept = default;
-        iterator_type_ &operator=(iterator_type_ &&) & noexcept = default;
-
-      private:
-#ifndef NDEBUG
-        constexpr iterator_type_(pointer current, basic_string *target) noexcept : current_(current), target_(target)
-        {
-        }
-#else
-        constexpr iterator_type_(pointer current) noexcept : current_(current)
-        {
-        }
-#endif
-
-      public:
-        constexpr iterator_type_ operator+(difference_type n) const & noexcept
-        {
-            auto temp = *this;
-            temp.current_ += n;
-            temp.check();
-
-            return temp;
-        }
-
-        constexpr iterator_type_ operator-(difference_type n) const & noexcept
-        {
-            auto temp = *this;
-            temp.current_ -= n;
-            temp.check();
-
-            return temp;
-        }
-
-        constexpr friend iterator_type_ operator+(difference_type n, iterator_type_ const &rhs) noexcept
-        {
-            auto temp = rhs;
-            temp.current_ += n;
-            temp.check();
-
-            return temp;
-        }
-
-        constexpr friend iterator_type_ operator-(difference_type n, iterator_type_ const &rhs) noexcept
-        {
-            auto temp = rhs;
-            temp.current_ -= n;
-            temp.check();
-
-            return temp;
-        }
-
-        constexpr friend difference_type operator-(iterator_type_ const &lhs, iterator_type_ const &rhs) noexcept
-        {
-            assert(lhs.target_ == rhs.target_);
-            // iterator belongs to different strings
-            return lhs.current_ - rhs.current_;
-        }
-
-        constexpr iterator_type_ &operator+=(difference_type n) & noexcept
-        {
-            current_ += n;
-            check();
-
-            return *this;
-        }
-
-        constexpr iterator_type_ &operator-=(difference_type n) & noexcept
-        {
-            current_ -= n;
-            check();
-
-            return *this;
-        }
-
-        constexpr iterator_type_ &operator++() & noexcept
-        {
-            ++current_;
-            check();
-
-            return *this;
-        }
-
-        constexpr iterator_type_ &operator--() & noexcept
-        {
-            --current_;
-            check();
-
-            return *this;
-        }
-
-        constexpr iterator_type_ operator++(int) & noexcept
-        {
-            iterator_type_ temp{*this};
-            ++current_;
-            check();
-
-            return temp;
-        }
-
-        constexpr iterator_type_ operator--(int) & noexcept
-        {
-            iterator_type_ temp{*this};
-            --current_;
-            check();
-
-            return temp;
-        }
-
-        constexpr value_type &operator[](difference_type n) const noexcept
-        {
-#ifndef NDEBUG
-            iterator_type_ end = (*this) + n;
-            end.check();
-#endif
-            return *(current_ + n);
-        }
-
-        constexpr value_type &operator*() const noexcept
-        {
-            return *current_;
-        }
-
-        constexpr value_type *operator->() const noexcept
-        {
-            return current_;
-        }
-
-        friend constexpr ::std::strong_ordering operator<=>(iterator_type_ const &,
-                                                            iterator_type_ const &) noexcept = default;
-    };
-
-    // ********************************* begin iterator function ******************************
+    // ************************ begin iterator function ************************
 
   public:
-    using iterator = iterator_type_;
-    using const_iterator = ::std::basic_const_iterator<iterator_type_>;
+    using iterator = string_detail::string_iterator<value_type, Alloc>;
+    using const_iterator = string_detail::string_iterator<value_type const, Alloc>;
     using reverse_iterator = ::std::reverse_iterator<iterator>;
     using const_reverse_iterator = ::std::reverse_iterator<const_iterator>;
 
+    friend iterator;
+    friend const_iterator;
+
     constexpr iterator begin() noexcept
     {
-#ifndef NDEBUG
-        return {begin_(), this};
+#if !defined(NDEBUG)
+        return {begin_(), begin_(), end_()};
 #else
         return {begin_()};
 #endif
@@ -578,8 +661,8 @@ class alignas(CharT *) basic_string
 
     constexpr iterator end() noexcept
     {
-#ifndef NDEBUG
-        return {end_(), this};
+#if !defined(NDEBUG)
+        return {end_(), begin_(), end_()};
 #else
         return {end_()};
 #endif
@@ -587,19 +670,19 @@ class alignas(CharT *) basic_string
 
     constexpr const_iterator begin() const noexcept
     {
-#ifndef NDEBUG
-        return iterator_type_{const_cast<value_type *>(begin_()), const_cast<basic_string *>(this)};
+#if !defined(NDEBUG)
+        return {begin_(), begin_(), end_()};
 #else
-        return iterator_type_{begin_()};
+        return {begin_()};
 #endif
     }
 
     constexpr const_iterator end() const noexcept
     {
-#ifndef NDEBUG
-        return iterator_type_{const_cast<value_type *>(end_()), const_cast<basic_string *>(this)};
+#if !defined(NDEBUG)
+        return {end_(), begin_(), end_()};
 #else
-        return iterator_type_{end_()};
+        return {end_()};
 #endif
     }
 
@@ -617,28 +700,33 @@ class alignas(CharT *) basic_string
     {
         return reverse_iterator{end()};
     }
+
     constexpr auto rbegin() const noexcept
     {
         return const_reverse_iterator{end()};
     }
+
     constexpr auto rend() noexcept
     {
         return reverse_iterator{begin()};
     }
+
     constexpr auto rend() const noexcept
     {
         return const_reverse_iterator{begin()};
     }
+
     constexpr auto crbegin() const noexcept
     {
         return const_reverse_iterator{cend()};
     }
+
     constexpr auto crend() const noexcept
     {
         return const_reverse_iterator{cbegin()};
     }
 
-    // ********************************* begin memory management ******************************
+    // ************************ begin memory management ************************
 
   private:
     /**
@@ -653,8 +741,8 @@ class alignas(CharT *) basic_string
 
         if consteval
         {
-            for (auto i = 0uz; i != cap + 1uz; ++i)
-                ::std::construct_at(&ptr[i]);
+            for (auto i = 0uz; i != count; ++i)
+                ::std::construct_at(::std::addressof(ptr[i]));
         }
 
         return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + count - 1uz /* null terminator */};
@@ -665,7 +753,7 @@ class alignas(CharT *) basic_string
         if consteval
         {
             for (auto i = 0uz; i != cap + 1uz; ++i)
-                ::std::construct_at(&ptr[i]);
+                ::std::construct_at(::std::addressof(ptr[i]));
         }
 
         return {ptr, ::std::to_address(ptr) + size, ::std::to_address(ptr) + cap};
@@ -695,6 +783,15 @@ class alignas(CharT *) basic_string
      * @param begin begin of characters
      * @return length
      */
+    constexpr static size_type c_string_length_common_(CharT const *begin) noexcept
+    {
+        auto end = begin;
+
+        for (; !traits_type::eq(*end, CharT{}); ++end)
+            ;
+
+        return end - begin;
+    }
     constexpr static size_type c_string_length_(CharT const *begin) noexcept
     {
         if !consteval
@@ -703,14 +800,13 @@ class alignas(CharT *) basic_string
                 return ::std::strlen(reinterpret_cast<char const *>(begin));
             else if constexpr (::std::is_same_v<wchar_t, CharT>)
                 return ::std::wcslen(begin);
+            else
+                return c_string_length_common_(begin);
         }
-
-        auto end = begin;
-
-        for (; *end != CharT{}; ++end)
-            ;
-
-        return end - begin;
+        else
+        {
+            return c_string_length_common_(begin);
+        }
     }
 
     /**
@@ -718,26 +814,39 @@ class alignas(CharT *) basic_string
      * @brief this function can be called with any legal state
      * @brief strong exception safety guarantee
      */
+    constexpr void assign_(CharT const *first, CharT const *last, bool is_long, size_type new_size)
+    {
+        assert(is_long == is_long_());
+        auto const ls = allocate_(new_size, new_size);
+        ::std::copy(first, last, ls.begin());
+        dealloc_(is_long);
+        long_str_(ls);
+    }
+
     constexpr void assign_(CharT const *first, CharT const *last)
     {
         auto const new_size = static_cast<size_type>(last - first);
         auto const is_long = is_long_();
 
-        // there is no need to worry about whether the ranges overlap,
-        // because ::std::ranges::copy will handle it correctly
-        if (capacity() >= new_size)
+        if !consteval
         {
-            if (auto const begin = begin_(); begin != first)
-                ::std::ranges::copy(first, last, begin);
+            if (capacity() >= new_size)
+            {
+                auto const begin = begin_();
+                ::std::less_equal less_eq;
+                if (!(less_eq(first, begin) && less_eq(begin, first)))
+                    ::std::copy(first, last, begin);
 
-            resize_shrink_(is_long, new_size);
+                resize_shrink_(is_long, new_size);
+            }
+            else
+            {
+                assign_(first, last, is_long, new_size);
+            }
         }
         else
         {
-            auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(first, last, ls.begin_);
-            dealloc_(is_long);
-            long_str_(ls);
+            assign_(first, last, is_long, new_size);
         }
     }
 
@@ -746,10 +855,22 @@ class alignas(CharT *) basic_string
      * @brief this function can be called with any legal state
      * @brief strong exception safety guarantee
      */
+    constexpr void insert_(size_type index, CharT const *first, CharT const *last, CharT *begin, CharT *end,
+                           bool is_long, size_type length, size_type new_size)
+    {
+
+        auto const ls = allocate_(new_size, new_size);
+        ::std::copy(begin, begin + index, ls.begin());
+        ::std::copy(begin + index, end, ls.begin() + index + length);
+        ::std::copy(first, last, ls.begin() + index);
+        dealloc_(is_long);
+        long_str_(ls);
+    }
+
     constexpr void insert_(size_type index, CharT const *first, CharT const *last)
     {
         if (index > size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
         auto const length = static_cast<size_type>(last - first);
         auto const new_size = size_() + length;
@@ -757,77 +878,69 @@ class alignas(CharT *) basic_string
         auto const end = end_();
         auto const is_long = is_long_();
 
-        if (capacity() >= new_size && !overlap(first, last, begin, end))
+        if !consteval
         {
-            ::std::ranges::copy_backward(begin + index, end, begin + new_size);
-            ::std::ranges::copy(first, last, begin + index);
-            resize_shrink_(is_long, new_size);
+            if (capacity() >= new_size && !overlap_(first, last, begin, end))
+            {
+                ::std::copy_backward(begin + index, end, begin + new_size);
+                ::std::copy(first, last, begin + index);
+                resize_shrink_(is_long, new_size);
+            }
+            else
+            {
+                insert_(index, first, last, begin, end, is_long, length, new_size);
+            }
         }
         else
         {
-            auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, begin + index, ls.begin());
-            ::std::ranges::copy(begin + index, end, ls.begin() + index + length);
-            ::std::ranges::copy(first, last, ls.begin() + index);
-            dealloc_(is_long);
-            long_str_(ls);
+            insert_(index, first, last, begin, end, is_long, length, new_size);
         }
+    }
+
+    constexpr void replace_(size_type pos, size_type count, CharT const *first, CharT const *last, CharT *begin,
+                            CharT *end, bool is_long, size_type length, size_type new_size)
+    {
+        auto const ls = allocate_(new_size, new_size);
+        ::std::copy(begin, begin + pos, ls.begin());
+        ::std::copy(first, last, ls.begin() + pos);
+        ::std::copy(begin + pos + count, end, ls.begin() + pos + length);
+        dealloc_(is_long);
+        long_str_(ls);
     }
 
     constexpr void replace_(size_type pos, size_type count, CharT const *first, CharT const *last)
     {
         if (pos > size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(size_() - pos, count);
+        count = ::std::min(size_() - pos, count);
         auto const length = static_cast<size_type>(last - first);
         auto const new_size = size_() - count + length;
         auto const begin = begin_();
         auto const end = end_();
         auto const is_long = is_long_();
 
-        if (capacity() >= new_size && !overlap(first, last, begin, end))
+        if !consteval
         {
-            if (count < length)
-                ::std::ranges::copy(begin + pos + count, end, begin + pos + length);
-            else
-                ::std::ranges::copy_backward(begin + pos + count, end, begin + new_size);
+            if (capacity() >= new_size && !overlap_(first, last, begin, end))
+            {
+                if (count < length)
+                    ::std::copy(begin + pos + count, end, begin + pos + length);
+                else
+                    ::std::copy_backward(begin + pos + count, end, begin + new_size);
 
-            ::std::ranges::copy(first, last, begin + pos);
-            resize_shrink_(is_long, new_size);
+                ::std::copy(first, last, begin + pos);
+                resize_shrink_(is_long, new_size);
+            }
+            else
+            {
+                replace_(pos, count, first, last, begin, end, is_long, length, new_size);
+            }
         }
         else
         {
-            auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, begin + pos, ls.begin());
-            ::std::ranges::copy(first, last, ls.begin() + pos);
-            ::std::ranges::copy(begin + pos + count, end, ls.begin() + pos + length);
-            dealloc_(is_long);
-            long_str_(ls);
+            replace_(pos, count, first, last, begin, end, is_long, length, new_size);
         }
-    }
-
-    constexpr void reserve_(size_type new_cap)
-    {
-        assert(new_cap > capacity());
-        auto const size = size_();
-        auto const begin = begin_();
-        auto const end = end_();
-        auto const is_long = is_long_();
-        auto const ls = allocate_(new_cap, size);
-        ::std::ranges::copy(begin, end, ls.begin());
-        dealloc_(is_long);
-        long_str_(ls);
-    }
-
-    constexpr void reserve_and_drop_(size_type new_cap)
-    {
-        assert(new_cap > capacity());
-        auto const size = size_();
-        auto const is_long = is_long_();
-        auto const ls = allocate_(new_cap, size);
-        dealloc_(is_long);
-        long_str_(ls);
     }
 
   public:
@@ -842,12 +955,27 @@ class alignas(CharT *) basic_string
      * @brief never shrink
      * @param new_cap new capacity
      */
+    constexpr void reserve()
+    {
+        reserve(size_());
+    }
     constexpr void reserve(size_type new_cap)
     {
         if (new_cap <= capacity())
             return;
-
-        reserve_(new_cap);
+        else if (new_cap > max_size())
+            throw ::std::length_error("string too long");
+        else
+        {
+            auto const size = size_();
+            auto const begin = begin_();
+            auto const end = end_();
+            auto const is_long = is_long_();
+            auto const ls = allocate_(new_cap, size);
+            ::std::copy(begin, end, ls.begin());
+            dealloc_(is_long);
+            long_str_(ls);
+        }
     }
 
     /**
@@ -859,14 +987,16 @@ class alignas(CharT *) basic_string
      */
     constexpr void resize(size_type count, value_type ch)
     {
-        auto const size = size_();
-
-        if (count <= size)
-            return resize_shrink_(is_long_(), count);
-
-        reserve(count);
-        ::std::ranges::fill(end_(), end_() + (count - size), ch);
-        resize_shrink_(is_long_(), count);
+        if (auto const size = size_(); count < size)
+        {
+            resize_shrink_(is_long_(), count);
+        }
+        else if (count > size)
+        {
+            reserve(count);
+            ::std::fill(end_(), end_() + (count - size), ch);
+            resize_shrink_(is_long_(), count);
+        }
     }
 
     /**
@@ -897,59 +1027,72 @@ class alignas(CharT *) basic_string
         auto const size = size_();
 
         if (capacity() == size)
-            reserve_(size * 2uz - size / 2uz);
+        {
+            auto const msize = max_size();
+            if (size >= msize)
+                throw_length_error_();
+            // NB: During constant evaluation, size == cap == 0 may occur
+            reserve(::std::min(size + size_type(1) + size / size_type(2), msize));
+        }
 
         *end_() = ch;
-        resize_shrink_(is_long_(), size + 1uz);
+        resize_shrink_(is_long_(), size + size_type(1));
     }
 
-    // ********************************* begin swap ******************************
+    // ****************************** begin swap ******************************
 
   private:
     constexpr void swap_without_ator(basic_string &other) noexcept
     {
         auto &self = *this;
-        ::std::ranges::swap(self.stor_, other.stor_);
-        ::std::ranges::swap(self.size_flag_, other.size_flag_);
+        using std::swap;
+        swap(self.stor_, other.stor_);
+        swap(self.size_flag_, other.size_flag_);
     }
 
   public:
     constexpr void swap(basic_string &other) noexcept
     {
+        using std::swap;
         if constexpr (atraits_t_::propagate_on_container_swap::value)
-            ::std::ranges::swap(other.allocator_, other.allocator_);
+            swap(other.allocator_, other.allocator_);
         else
             assert(other.allocator_ == allocator_);
 
         other.swap_without_ator(*this);
     }
 
-    friend void swap(basic_string &lhs, basic_string &rhs) noexcept
+    friend constexpr void swap(basic_string &lhs, basic_string &rhs) noexcept
     {
         lhs.swap(rhs);
     }
 
-    // ********************************* begin constructor ******************************
+    // *************************** begin constructor ***************************
 
     constexpr void construct_(::std::size_t n)
     {
-        if (short_str_max_ < n)
-            long_str_(allocate_(n, n));
-        else
+        if (short_str_max_ >= n)
             resize_shrink_(false, n);
+        else if (n > max_size())
+            throw_length_error_();
+        else
+            long_str_(allocate_(n, n));
     }
 
   public:
-    constexpr basic_string() noexcept(noexcept(allocator_type())) = default;
+    constexpr basic_string() noexcept(noexcept(allocator_type())) : allocator_(allocator_type())
+    {
+    }
 
     constexpr explicit basic_string(allocator_type const &a) noexcept : allocator_(a)
     {
     }
 
+    template <string_detail::mini_alloc IAlloc = Alloc>
     constexpr basic_string(size_type count, value_type ch, allocator_type const &a = allocator_type()) : allocator_(a)
     {
         construct_(count);
-        ::std::ranges::fill(begin_(), end_(), ch);
+        ::std::fill(begin_(), end_(), ch);
     }
 
     template <typename U, typename V>
@@ -961,7 +1104,7 @@ class alignas(CharT *) basic_string
         if constexpr (::std::random_access_iterator<U>)
         {
             construct_(last - first);
-            ::std::ranges::copy(first, last, begin_());
+            ::std::copy(first, last, begin_());
         }
         else
         {
@@ -1010,9 +1153,10 @@ class alignas(CharT *) basic_string
     constexpr basic_string(CharT const *s, size_type count, allocator_type const &a = allocator_type()) : allocator_(a)
     {
         construct_(count);
-        ::std::ranges::copy(s, s + count, begin_());
+        ::std::copy(s, s + count, begin_());
     }
 
+    template <string_detail::mini_alloc IAlloc = Alloc>
     constexpr basic_string(CharT const *s, allocator_type const &a = allocator_type())
         : basic_string(s, c_string_length_(s), a)
     {
@@ -1020,14 +1164,13 @@ class alignas(CharT *) basic_string
 
     constexpr basic_string(::std::nullptr_t) = delete;
 
-    // clang-format off
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const &, CharT const*>)
-    explicit constexpr basic_string(StringViewLike const & t, allocator_type const& a = allocator_type())
-	     : basic_string(::std::basic_string_view<value_type, traits_type>{ t }.data(), ::std::basic_string_view<value_type, traits_type>{ t }.size(), a)
+        requires is_svlike_v_<StringViewLike>
+    explicit constexpr basic_string(StringViewLike const &t, allocator_type const &a = allocator_type())
+        : basic_string(::std::basic_string_view<value_type, traits_type>{t}.data(),
+                       ::std::basic_string_view<value_type, traits_type>{t}.size(), a)
     {
     }
-    // clang-format on
 
     template <typename StringViewLike>
         requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>>
@@ -1038,18 +1181,18 @@ class alignas(CharT *) basic_string
         ::std::basic_string_view<value_type, traits_type> sv = t;
 
         if (pos > sv.size())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        n = ::std::ranges::min(sv.size() - pos, n);
+        n = ::std::min(static_cast<size_type>(sv.size() - pos), n);
         construct_(n);
-        ::std::ranges::copy(sv.data() + pos, sv.data() + pos + n, begin_());
+        ::std::copy(sv.data() + pos, sv.data() + pos + n, begin_());
     }
 
     constexpr basic_string(basic_string const &other)
         : allocator_(atraits_t_::select_on_container_copy_construction(other.allocator_))
     {
         construct_(other.size_());
-        ::std::ranges::copy(other.begin_(), other.end_(), begin_());
+        ::std::copy(other.begin_(), other.end_(), begin_());
     }
 
     constexpr basic_string(basic_string &&other) noexcept : allocator_(other.allocator_)
@@ -1060,7 +1203,7 @@ class alignas(CharT *) basic_string
     constexpr basic_string(const basic_string &other, allocator_type const &a) : allocator_(a)
     {
         construct_(other.size_());
-        ::std::ranges::copy(other.begin_(), other.end_(), begin_());
+        ::std::copy(other.begin_(), other.end_(), begin_());
     }
 
     constexpr basic_string(basic_string const &other, size_type pos, allocator_type const &a = allocator_type())
@@ -1079,7 +1222,7 @@ class alignas(CharT *) basic_string
         else
         {
             construct_(other.size_());
-            ::std::ranges::copy(other.begin_(), other.end_(), begin_());
+            ::std::copy(other.begin_(), other.end_(), begin_());
         }
     }
 
@@ -1088,11 +1231,11 @@ class alignas(CharT *) basic_string
         : allocator_(a)
     {
         if (pos > other.size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(other.size_() - pos, count);
+        count = ::std::min(other.size_() - pos, count);
         construct_(count);
-        ::std::ranges::copy(other.begin_() + pos, other.begin_() + pos + count, begin_());
+        ::std::copy(other.begin_() + pos, other.begin_() + pos + count, begin_());
     }
 
     constexpr basic_string(basic_string &&other, size_type pos, size_type count,
@@ -1102,14 +1245,14 @@ class alignas(CharT *) basic_string
         assert(allocator_ == a);
 
         if (pos > other.size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(other.size_() - pos, count);
+        count = ::std::min(other.size_() - pos, count);
 
         if (other.allocator_ == allocator_)
         {
             if (pos != 0uz)
-                ::std::ranges::copy(other.begin_() + pos, other.begin_() + pos + count, other.begin_());
+                ::std::copy(other.begin_() + pos, other.begin_() + pos + count, other.begin_());
 
             other.resize_shrink_(other.is_long_(), count);
             stor_ = other.stor_;
@@ -1120,7 +1263,7 @@ class alignas(CharT *) basic_string
         else
         {
             construct_(count);
-            ::std::ranges::copy(other.begin_() + pos, other.begin_() + pos + count, begin_());
+            ::std::copy(other.begin_() + pos, other.begin_() + pos + count, begin_());
         }
     }
 
@@ -1129,7 +1272,7 @@ class alignas(CharT *) basic_string
     {
     }
 
-    // ********************************* begin assign ******************************
+    // ***************************** begin assign *****************************
 
   private:
     constexpr void copy_ator_and_move_(basic_string &str) noexcept
@@ -1145,7 +1288,7 @@ class alignas(CharT *) basic_string
   public:
     constexpr basic_string &assign(const basic_string &str)
     {
-        if (&str == this)
+        if (::std::addressof(str) == this)
             return *this;
 
         if constexpr (atraits_t_::propagate_on_container_copy_assignment::value)
@@ -1191,11 +1334,19 @@ class alignas(CharT *) basic_string
 
     constexpr basic_string &assign(size_type count, CharT ch)
     {
-        if (capacity() < count)
-            reserve_and_drop_(count);
+        if (count > max_size())
+            throw_length_error_();
+        else if (capacity() < count)
+        {
+            auto const size = size_();
+            auto const is_long = is_long_();
+            auto const ls = allocate_(count, size);
+            dealloc_(is_long);
+            long_str_(ls);
+        }
 
         auto const is_long = is_long_();
-        ::std::ranges::fill(begin_(), begin_() + count, ch);
+        ::std::fill(begin_(), begin_() + count, ch);
         resize_shrink_(is_long, count);
 
         return *this;
@@ -1215,39 +1366,37 @@ class alignas(CharT *) basic_string
         return *this;
     }
 
-    // clang-format off
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const &, CharT const*>)
-    constexpr basic_string& assign(StringViewLike const& t)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &assign(StringViewLike const &t)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
-        assign_(sv.data(), sv.data()+sv.size());
+        assign_(sv.data(), sv.data() + sv.size());
 
         return *this;
     }
 
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const &, CharT const*>)
-    constexpr basic_string& assign(StringViewLike const & t, size_type pos, size_type count = npos)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &assign(StringViewLike const &t, size_type pos, size_type count = npos)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
 
         if (pos > sv.size())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(sv.size() - pos, count);
+        count = ::std::min(static_cast<size_type>(sv.size() - pos), count);
         assign_(sv.data() + pos, sv.data() + pos + count);
 
         return *this;
     }
-    // clang-format on
 
     constexpr basic_string &assign(const basic_string &str, size_type pos, size_type count = npos)
     {
         if (pos > str.size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(str.size_() - pos, count);
+        count = ::std::min(str.size_() - pos, count);
         assign_(str.begin_() + pos, str.begin_() + pos + count);
 
         return *this;
@@ -1259,7 +1408,7 @@ class alignas(CharT *) basic_string
     {
         if constexpr (::std::contiguous_iterator<U> && ::std::is_same_v<value_type, ::std::iter_value_t<U>>)
         {
-            assign_(::std::to_address(first), ::std::to_address(first) + ::std::ranges::distance(first, last));
+            assign_(::std::to_address(first), ::std::to_address(first) + ::std::distance(first, last));
         }
         else
         {
@@ -1277,7 +1426,7 @@ class alignas(CharT *) basic_string
         return *this;
     }
 
-    // ********************************* begin operator= ******************************
+    // **************************** begin operator= ****************************
 
     constexpr basic_string &operator=(const basic_string &str)
     {
@@ -1308,52 +1457,121 @@ class alignas(CharT *) basic_string
         return assign(ilist);
     }
 
-    // clang-format off
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const &, CharT const*>)
-    constexpr basic_string& operator=(StringViewLike const & t)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &operator=(StringViewLike const &t)
     {
         return assign(t);
     }
-    // clang-format on
 
     constexpr basic_string &operator=(::std::nullptr_t) = delete;
 
-    // ********************************* begin compare ******************************
+    // ***************************** begin compare *****************************
 
-    friend constexpr ::std::strong_ordering operator<=>(basic_string const &lhs, basic_string const &rhs) noexcept
+  private:
+    static constexpr ::std::strong_ordering compare_(value_type const *first, size_type size, value_type const *first1,
+                                                     size_type size1) noexcept
     {
-        auto const lsize = lhs.size_();
-        auto const rsize = rhs.size_();
-
-        for (auto begin = lhs.begin_(), end = begin + ::std::ranges::min(lsize, rsize), start = rhs.begin_();
-             begin != end; ++begin, ++start)
+        if !consteval
         {
-            if (*begin > *start)
+            ::std::less_equal less_eq;
+
+            if (less_eq(first, first1) && less_eq(first1, first))
+                return size <=> size1;
+        }
+
+        for (auto const last = first + ::std::min(size, size1); first != last; ++first, ++first1)
+        {
+            if (*first > *first1)
                 return ::std::strong_ordering::greater;
-            else if (*begin < *start)
+            else if (*first < *first1)
                 return ::std::strong_ordering::less;
         }
 
-        return lsize <=> rsize;
+        return size <=> size1;
+    }
+
+    static constexpr int unwrap_stong_ordering_(_STD strong_ordering od) noexcept
+    {
+        return od > 0 ? 1 : (od < 0 ? -1 : 0);
+    }
+
+  public:
+    friend constexpr ::std::strong_ordering operator<=>(basic_string const &lhs, basic_string const &rhs) noexcept
+    {
+        return compare_(lhs.begin_(), lhs.size_(), rhs.begin_(), rhs.size_());
+    }
+
+    friend constexpr ::std::strong_ordering operator<=>(
+        basic_string const &lhs, ::std::basic_string_view<value_type, traits_type> const &rhs) noexcept
+    {
+        return compare_(lhs.begin_(), lhs.size_(), rhs.data(), rhs.size());
     }
 
     friend constexpr ::std::strong_ordering operator<=>(basic_string const &lhs, CharT const *rhs) noexcept
     {
+        return compare_(lhs.begin_(), lhs.size_(), rhs, basic_string::c_string_length_(rhs));
+    }
 
-        auto const rsize = basic_string::c_string_length_(rhs);
-        auto const lsize = lhs.size_();
+    constexpr int compare(const basic_string &str) const noexcept
+    {
+        return order_to_int_(view_() <=> str.view_());
+    }
 
-        for (auto begin = lhs.begin_(), end = begin + ::std::ranges::min(lsize, rsize), start = rhs; begin != end;
-             ++begin, ++start)
-        {
-            if (*begin > *start)
-                return ::std::strong_ordering::greater;
-            else if (*begin < *start)
-                return ::std::strong_ordering::less;
-        }
+    constexpr int compare(size_type pos1, size_type count1, const basic_string &str) const
+    {
+        return order_to_int_(view_().substr(pos1, count1) <=> str.view_());
+    }
 
-        return lsize <=> rsize;
+    constexpr int compare(size_type pos1, size_type count1, const basic_string &str, size_type pos2,
+                          size_type count2 = npos) const
+    {
+        return order_to_int_(view_().substr(pos1, count1) <=> str.view_().substr(pos2, count2));
+    }
+
+    constexpr int compare(const CharT *s) const noexcept
+    {
+        return order_to_int_(view_() <=> ::std::basic_string_view<value_type, traits_type>(s));
+    }
+
+    constexpr int compare(size_type pos1, size_type count1, const CharT *s) const
+    {
+        return order_to_int_(view_().substr(pos1, count1) <=> ::std::basic_string_view<value_type, traits_type>(s));
+    }
+
+    constexpr int compare(size_type pos1, size_type count1, const CharT *s, size_type count2) const
+    {
+        return order_to_int_(view_().substr(pos1, count1) <=>
+                                ::std::basic_string_view<value_type, traits_type>(s, count2));
+    }
+
+    template <class StringViewLike>
+        requires is_svlike_v_<StringViewLike>
+    constexpr int compare(const StringViewLike &t) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return order_to_int_(view_() <=> tsv);
+    }
+
+    template <class StringViewLike>
+        requires is_svlike_v_<StringViewLike>
+    constexpr int compare(size_type pos1, size_type count1, const StringViewLike &t) const
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return order_to_int_(view_().substr(pos1, count1) <=> tsv);
+    }
+
+    template <class StringViewLike>
+        requires is_svlike_v_<StringViewLike>
+    constexpr int compare(size_type pos1, size_type count1, const StringViewLike &t, size_type pos2,
+                          size_type count2 = npos) const
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return order_to_int_(view_().substr(pos1, count1) <=> tsv.substr(pos2, count2));
     }
 
   private:
@@ -1366,7 +1584,7 @@ class alignas(CharT *) basic_string
         {
             for (; begin != end; ++begin, ++first)
             {
-                if (*first != *begin)
+                if (!traits_type::eq(*first, *begin))
                     return false;
             }
 
@@ -1384,7 +1602,7 @@ class alignas(CharT *) basic_string
         return equal_(lhs.begin_(), lhs.end_(), rhs.begin_(), rhs.end_());
     }
 
-    // Used to resolve ambiguation with operator== provided by std::basic_string_view.
+    // Used to resolve ambiguation with operator== provided by ::std::basic_string_view.
     friend constexpr bool operator==(basic_string const &lhs,
                                      ::std::basic_string_view<value_type, traits_type> rhs) noexcept
     {
@@ -1396,9 +1614,19 @@ class alignas(CharT *) basic_string
         return equal_(lhs.begin_(), lhs.end_(), rhs, rhs + c_string_length_(rhs));
     }
 
-    // ********************************* begin append ******************************
+    // ***************************** begin append *****************************
 
   private:
+    constexpr void append_(CharT const *first, CharT const *last, CharT *begin, CharT *end, bool is_long,
+                           size_type size, size_type new_size)
+    {
+        auto const ls = allocate_(new_size, new_size);
+        ::std::copy(begin, end, ls.begin());
+        ::std::copy(first, last, ls.begin() + size);
+        dealloc_(is_long);
+        long_str_(ls);
+    }
+
     constexpr void append_(CharT const *first, CharT const *last)
     {
         auto const length = static_cast<size_type>(last - first);
@@ -1408,18 +1636,21 @@ class alignas(CharT *) basic_string
         auto const new_size = size + length;
         auto const is_long = is_long_();
 
-        if (capacity() >= new_size && !overlap(first, last, begin, end))
+        if !consteval
         {
-            ::std::ranges::copy(first, last, end);
-            resize_shrink_(is_long, new_size);
+            if (capacity() >= new_size && !overlap_(first, last, begin, end))
+            {
+                ::std::copy(first, last, end);
+                resize_shrink_(is_long, new_size);
+            }
+            else
+            {
+                append_(first, last, begin, end, is_long, size, new_size);
+            }
         }
         else
         {
-            auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, end, ls.begin());
-            ::std::ranges::copy(first, last, ls.begin() + size);
-            dealloc_(is_long);
-            long_str_(ls);
+            append_(first, last, begin, end, is_long, size, new_size);
         }
     }
 
@@ -1428,7 +1659,7 @@ class alignas(CharT *) basic_string
     {
         auto const size = size_();
         reserve(size + count);
-        ::std::ranges::fill(end_(), end_() + count, ch);
+        ::std::fill(end_(), end_() + count, ch);
         resize_shrink_(is_long_(), size + count);
 
         return *this;
@@ -1448,10 +1679,9 @@ class alignas(CharT *) basic_string
         return *this;
     }
 
-    // clang-format off
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const &, CharT const*>)
-    constexpr basic_string& append(StringViewLike const & t)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &append(StringViewLike const &t)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
         append_(sv.data(), sv.data() + sv.size());
@@ -1460,20 +1690,19 @@ class alignas(CharT *) basic_string
     }
 
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const &, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const &, CharT const*>)
-    constexpr basic_string& append(StringViewLike const & t, size_type pos, size_type count = npos)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &append(StringViewLike const &t, size_type pos, size_type count = npos)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
 
         if (pos > sv.size())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(sv.size() - pos, count);
-        append_(sv.data() + pos,sv.data() + pos + count);
+        count = ::std::min(static_cast<size_type>(sv.size() - pos), count);
+        append_(sv.data() + pos, sv.data() + pos + count);
 
         return *this;
     }
-    // clang-format on
 
     constexpr basic_string &append(const basic_string &str)
     {
@@ -1485,9 +1714,9 @@ class alignas(CharT *) basic_string
     constexpr basic_string &append(const basic_string &str, size_type pos, size_type count = npos)
     {
         if (pos > str.size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(str.size_() - pos, count);
+        count = ::std::min(str.size_() - pos, count);
         append_(str.begin_() + pos, str.begin_() + pos + count);
 
         return *this;
@@ -1499,7 +1728,7 @@ class alignas(CharT *) basic_string
     {
         if constexpr (::std::contiguous_iterator<U> && ::std::is_same_v<value_type, ::std::iter_value_t<U>>)
         {
-            append_(::std::to_address(first), ::std::to_address(first) + ::std::ranges::distance(first, last));
+            append_(::std::to_address(first), ::std::to_address(first) + ::std::distance(first, last));
         }
         else
         {
@@ -1517,7 +1746,7 @@ class alignas(CharT *) basic_string
         return *this;
     }
 
-    // ********************************* begin operator+= ******************************
+    // *************************** begin operator+= ***************************
 
     constexpr basic_string &operator+=(const basic_string &str)
     {
@@ -1541,16 +1770,14 @@ class alignas(CharT *) basic_string
         return append(ilist);
     }
 
-    // clang-format off
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const&, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const&, CharT const*>)
-    constexpr basic_string& operator+=(StringViewLike const& t)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &operator+=(StringViewLike const &t)
     {
         return append(t);
     }
-    // clang-format on
 
-    // ********************************* begin search ******************************
+    // ***************************** begin search *****************************
 
   public:
     constexpr bool starts_with(::std::basic_string_view<value_type, traits_type> sv) const noexcept
@@ -1590,7 +1817,7 @@ class alignas(CharT *) basic_string
 #if defined(__cpp_lib_string_contains) && (__cpp_lib_string_contains >= 202011L)
     constexpr bool contains(::std::basic_string_view<value_type, traits_type> sv) const noexcept
     {
-        return ::std::basic_string_view<value_type, traits_type>{begin_(), end_()}.contains(sv);
+        return view_().contains(sv);
     }
 
     constexpr bool contains(CharT ch) const noexcept
@@ -1606,12 +1833,11 @@ class alignas(CharT *) basic_string
 
     constexpr bool contains(CharT const *s) const noexcept
     {
-        return ::std::basic_string_view<value_type, traits_type>{begin_(), end_()}.contains(
-            ::std::basic_string_view<value_type, traits_type>{s, s + c_string_length_(s)});
+        return view_().contains(s);
     }
 #endif
 
-    // ********************************* begin substr ******************************
+    // ***************************** begin substr *****************************
 
     constexpr basic_string substr(size_type pos = 0uz, size_type count = npos) const &
     {
@@ -1620,15 +1846,24 @@ class alignas(CharT *) basic_string
 
     constexpr basic_string substr(size_type pos = 0uz, size_type count = npos) &&
     {
-        return basic_string{std::move(*this), pos, count};
+        return basic_string{::std::move(*this), pos, count};
     }
 
-    // ********************************* begin insert ******************************
+    constexpr ::std::basic_string_view<value_type, traits_type> subview(size_type pos = 0uz, size_type count = npos) const
+    {
+        if (pos > size_())
+            throw ::std::out_of_range("string_view::substr");
+
+        return view_().substr(pos, count);
+    }
+
+
+    // ***************************** begin insert *****************************
 
     constexpr basic_string &insert(size_type index, size_type count, value_type ch)
     {
         if (index > size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
         auto const new_size = size_() + count;
         auto const begin = begin_();
@@ -1637,16 +1872,16 @@ class alignas(CharT *) basic_string
 
         if (capacity() >= new_size)
         {
-            ::std::ranges::copy_backward(begin + index, end, end + count);
-            ::std::ranges::fill(begin + index, begin + index + count, ch);
+            ::std::copy_backward(begin + index, end, end + count);
+            ::std::fill(begin + index, begin + index + count, ch);
             resize_shrink_(is_long, new_size);
         }
         else
         {
             auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, begin + index, ls.begin());
-            ::std::ranges::copy(begin + index, end, ls.begin() + index + count);
-            ::std::ranges::fill(ls.begin() + index, ls.begin() + index + count, ch);
+            ::std::copy(begin, begin + index, ls.begin());
+            ::std::copy(begin + index, end, ls.begin() + index + count);
+            ::std::fill(ls.begin() + index, ls.begin() + index + count, ch);
             dealloc_(is_long);
             long_str_(ls);
         }
@@ -1678,9 +1913,9 @@ class alignas(CharT *) basic_string
     constexpr basic_string &insert(size_type index, const basic_string &str, size_type s_index, size_type count = npos)
     {
         if (s_index > str.size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(str.size_() - s_index, count);
+        count = ::std::min(str.size_() - s_index, count);
         insert_(index, str.begin_() + s_index, str.begin_() + s_index + count);
 
         return *this;
@@ -1688,21 +1923,21 @@ class alignas(CharT *) basic_string
 
     constexpr iterator insert(const_iterator pos, CharT ch)
     {
-        assert(pos.base().current_ >= begin_() && pos.base().current_ <= end_());
+        assert(pos.current_ >= begin_() && pos.current_ <= end_());
         auto const size = size_();
-        auto const index = pos.base().current_;
         auto const begin = begin_();
+        auto const index = begin + (pos.current_ - begin);
         auto const end = end_();
         auto const is_long = is_long_();
 
         if (capacity() >= size + 1uz)
         {
-            ::std::ranges::copy_backward(index, end, end + 1uz);
+            ::std::copy_backward(index, end, end + 1uz);
             *index = ch;
             resize_shrink_(is_long, size + 1);
 
-#ifndef NDEBUG
-            return {index, this};
+#if !defined(NDEBUG)
+            return {index, begin, end};
 #else
             return {index};
 #endif
@@ -1710,15 +1945,15 @@ class alignas(CharT *) basic_string
         else
         {
             auto const ls = allocate_(size * 2uz - size / 2uz, size + 1uz);
-            ::std::ranges::copy(begin, index, ls.begin());
+            ::std::copy(begin, index, ls.begin());
             auto const new_index = ls.begin() + (index - begin);
             *new_index = ch;
-            ::std::ranges::copy(index, end, new_index + 1uz);
+            ::std::copy(index, end, new_index + 1uz);
             dealloc_(is_long);
             long_str_(ls);
 
-#ifndef NDEBUG
-            return {new_index, this};
+#if !defined(NDEBUG)
+            return {new_index, ls.begin(), ls.end()};
 #else
             return {new_index};
 #endif
@@ -1727,26 +1962,22 @@ class alignas(CharT *) basic_string
 
     constexpr iterator insert(const_iterator pos, size_type count, CharT ch)
     {
-        auto const index = pos.base().current_ - begin_();
+        auto const index = pos.current_ - begin_();
         insert(index, count, ch);
 
-#ifndef NDEBUG
-        return {begin_() + index, this};
-#else
-        return {begin_() + index};
-#endif
+        return {begin() + index};
     }
 
     template <typename U, typename V>
         requires ::std::input_iterator<U> && (!::std::is_integral_v<V>)
     constexpr iterator insert(const_iterator pos, U first, V last)
     {
-        assert(pos.base().current_ >= begin_() && pos.base().current_ <= end_());
-        auto const index = pos.base().current_ - begin_();
+        assert(pos.current_ >= begin_() && pos.current_ <= end_());
+        auto const index = pos.current_ - begin_();
 
         if constexpr (::std::contiguous_iterator<U> && ::std::is_same_v<value_type, ::std::iter_value_t<U>>)
         {
-            insert_(index, ::std::to_address(first), ::std::to_address(first) + ::std::ranges::distance(first, last));
+            insert_(index, ::std::to_address(first), ::std::to_address(first) + ::std::distance(first, last));
         }
         else
         {
@@ -1754,29 +1985,20 @@ class alignas(CharT *) basic_string
             insert_(index, temp.begin_(), temp.end_());
         }
 
-#ifndef NDEBUG
-        return {begin_() + index, this};
-#else
-        return {begin_() + index};
-#endif
+        return {begin() + index};
     }
 
     constexpr iterator insert(const_iterator pos, ::std::initializer_list<CharT> ilist)
     {
-        auto const index = pos.base().current_ - begin_();
+        auto const index = pos.current_ - begin_();
         insert_(index, ilist.begin(), ilist.begin() + ilist.size());
 
-#ifndef NDEBUG
-        return {begin_() + index, this};
-#else
-        return {begin_() + index};
-#endif
+        return {begin() + index};
     }
 
-    // clang-format off
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const&, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const&, CharT const*>)
-    constexpr basic_string& insert(size_type pos, StringViewLike const& t)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &insert(size_type pos, StringViewLike const &t)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
         insert_(pos, sv.data(), sv.data() + sv.size());
@@ -1785,22 +2007,21 @@ class alignas(CharT *) basic_string
     }
 
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<StringViewLike const&, ::std::basic_string_view<value_type, traits_type>> && (!::std::is_convertible_v<StringViewLike const&, CharT const*>)
-    constexpr basic_string& insert(size_type pos, StringViewLike const& t, size_type t_index, size_type count = npos)
+        requires is_svlike_v_<StringViewLike>
+    constexpr basic_string &insert(size_type pos, StringViewLike const &t, size_type t_index, size_type count = npos)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
 
         if (t_index > sv.size())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(sv.size() - t_index, count);
+        count = ::std::min(static_cast<size_type>(sv.size() - t_index), count);
         insert_(pos, sv.data() + t_index, sv.data() + t_index + count);
 
         return *this;
     }
-    // clang-format on
 
-    // ********************************* begin erase ******************************
+    // ****************************** begin erase ******************************
 
   private:
     constexpr void erase_(CharT *first, CharT const *last) noexcept
@@ -1808,7 +2029,7 @@ class alignas(CharT *) basic_string
         assert(first >= begin_() && last <= end_());
         auto const is_long = is_long_();
         auto const size = size_();
-        ::std::ranges::copy(last, end_(), first);
+        ::std::copy(last, static_cast<CharT const *>(end_()), first);
         resize_shrink_(is_long, size - (last - first));
     }
 
@@ -1816,9 +2037,9 @@ class alignas(CharT *) basic_string
     constexpr basic_string &erase(size_type index = 0uz, size_type count = npos)
     {
         if (index > size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(size_() - index, count);
+        count = ::std::min(size_() - index, count);
         erase_(begin_() + index, begin_() + index + count);
 
         return *this;
@@ -1826,15 +2047,15 @@ class alignas(CharT *) basic_string
 
     constexpr iterator erase(const_iterator position) noexcept
     {
-        auto const start = position.base().current_;
-        assert(start >= begin_() && start <= end_());
+        auto const start = begin_() + (position.current_ - begin_());
+        assert(start >= begin_() && start < end_());
         auto const is_long = is_long_();
         auto const size = size_();
-        ::std::ranges::copy(start + 1uz, end_(), start);
+        ::std::copy(start + 1uz, end_(), start);
         resize_shrink_(is_long, size - 1uz);
 
-#ifndef NDEBUG
-        return {start, this};
+#if !defined(NDEBUG)
+        return {start, begin_(), end_()};
 #else
         return {start};
 #endif
@@ -1842,17 +2063,17 @@ class alignas(CharT *) basic_string
 
     constexpr iterator erase(const_iterator first, const_iterator last) noexcept
     {
-        auto const start = first.base().current_;
-        erase_(start, last.base().current_);
+        auto const start = begin_() + (first.current_ - begin_());
+        erase_(start, last.current_);
 
-#ifndef NDEBUG
-        return {start, this};
+#if !defined(NDEBUG)
+        return {start, begin_(), end_()};
 #else
         return {start};
 #endif
     }
 
-    // ********************************* begin pop_back ******************************
+    // **************************** begin pop_back ****************************
 
     constexpr void pop_back() noexcept
     {
@@ -1860,7 +2081,7 @@ class alignas(CharT *) basic_string
         resize_shrink_(is_long_(), size_() - 1uz);
     }
 
-    // ********************************* begin replace ******************************
+    // ***************************** begin replace *****************************
 
     constexpr basic_string &replace(size_type pos, size_type count, const basic_string &str)
     {
@@ -1871,7 +2092,7 @@ class alignas(CharT *) basic_string
 
     constexpr basic_string &replace(const_iterator first, const_iterator last, const basic_string &str)
     {
-        auto const start = first.base().current_;
+        auto const start = first.current_;
         assert(start >= begin_() && start <= end_() && first <= last);
         replace_(start - begin_(), last - first, str.begin_(), str.end_());
 
@@ -1882,9 +2103,9 @@ class alignas(CharT *) basic_string
                                     size_type count2 = npos)
     {
         if (pos2 > str.size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count2 = ::std::ranges::min(count2, str.size_() - pos2);
+        count2 = ::std::min(count2, str.size_() - pos2);
         replace_(pos, count, str.begin_() + pos2, str.begin_() + pos2 + count2);
 
         return *this;
@@ -1900,7 +2121,7 @@ class alignas(CharT *) basic_string
     constexpr basic_string &replace(const_iterator first, const_iterator last, CharT const *cstr, size_type count2)
     {
         assert(first >= begin() && last <= end() && first <= last);
-        replace_(first.base().current_ - begin_(), last - first, cstr, cstr + count2);
+        replace_(first.current_ - begin_(), last - first, cstr, cstr + count2);
 
         return *this;
     }
@@ -1915,7 +2136,7 @@ class alignas(CharT *) basic_string
     constexpr basic_string &replace(const_iterator first, const_iterator last, CharT const *cstr)
     {
         assert(first >= begin() && last <= end() && first <= last);
-        replace_(first.base().current_ - begin_(), last - first, cstr, cstr + c_string_length_(cstr));
+        replace_(first.current_ - begin_(), last - first, cstr, cstr + c_string_length_(cstr));
 
         return *this;
     }
@@ -1923,14 +2144,13 @@ class alignas(CharT *) basic_string
     constexpr basic_string &replace(const_iterator first, const_iterator last, ::std::initializer_list<CharT> ilist)
     {
         assert(first <= last);
-        replace_(first.base().current_ - begin_(), last - first, ilist.begin(), ilist.begin() + ilist.size());
+        replace_(first.current_ - begin_(), last - first, ilist.begin(), ilist.begin() + ilist.size());
 
         return *this;
     }
 
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<value_type, traits_type>> &&
-                 (!::std::is_convertible_v<const StringViewLike &, CharT const *>)
+        requires is_svlike_v_<StringViewLike>
     constexpr basic_string &replace(size_type pos, size_type count, const StringViewLike &t)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
@@ -1940,31 +2160,27 @@ class alignas(CharT *) basic_string
     }
 
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<value_type, traits_type>> &&
-                 (!::std::is_convertible_v<const StringViewLike &, CharT const *>)
+        requires is_svlike_v_<StringViewLike>
     constexpr basic_string &replace(const_iterator first, const_iterator last, const StringViewLike &t)
     {
         assert(first >= begin() && last <= end() && first <= last);
         ::std::basic_string_view<value_type, traits_type> sv = t;
-        auto sv_data = sv.data();
-        replace_(first.base().current_ - begin_(), static_cast<size_type>(last - first), sv.data(),
-                 sv.data() + sv.size());
+        replace_(first.current_ - begin_(), static_cast<size_type>(last - first), sv.data(), sv.data() + sv.size());
 
         return *this;
     }
 
     template <typename StringViewLike>
-        requires ::std::is_convertible_v<const StringViewLike &, ::std::basic_string_view<value_type, traits_type>> &&
-                 (!::std::is_convertible_v<const StringViewLike &, CharT const *>)
+        requires is_svlike_v_<StringViewLike>
     constexpr basic_string &replace(size_type pos, size_type count, const StringViewLike &t, size_type pos2,
                                     size_type count2 = npos)
     {
         ::std::basic_string_view<value_type, traits_type> sv = t;
 
         if (pos2 > sv.size())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count2 = ::std::ranges::min(sv.size() - pos2, count2);
+        count2 = ::std::min(static_cast<size_type>(sv.size() - pos2), count2);
         replace_(pos, count, sv.data() + pos2, sv.data() + pos2 + count2);
 
         return *this;
@@ -1973,9 +2189,9 @@ class alignas(CharT *) basic_string
     constexpr basic_string &replace(size_type pos, size_type count, size_type count2, CharT ch)
     {
         if (pos > size_())
-            throw out_of_range();
+            throw_out_of_range_();
 
-        count = ::std::ranges::min(size_() - pos, count);
+        count = ::std::min(size_() - pos, count);
         auto const size = size_();
         auto const new_size = size - count + count2;
         auto const begin = begin_();
@@ -1985,19 +2201,19 @@ class alignas(CharT *) basic_string
         if (capacity() >= new_size)
         {
             if (count > count2)
-                ::std::ranges::copy(begin + pos + count, end, begin + pos + count2);
+                ::std::copy(begin + pos + count, end, begin + pos + count2);
             else if (count < count2)
-                ::std::ranges::copy_backward(begin + pos + count, end, begin + new_size);
+                ::std::copy_backward(begin + pos + count, end, begin + new_size);
 
-            ::std::ranges::fill(begin + pos, begin + pos + count2, ch);
+            ::std::fill(begin + pos, begin + pos + count2, ch);
             resize_shrink_(is_long, new_size);
         }
         else
         {
             auto const ls = allocate_(new_size, new_size);
-            ::std::ranges::copy(begin, begin + pos, ls.begin());
-            ::std::ranges::copy(begin + pos + count, end, ls.begin() + pos + count2);
-            ::std::ranges::fill(ls.begin() + pos, ls.begin() + pos + count2, ch);
+            ::std::copy(begin, begin + pos, ls.begin());
+            ::std::copy(begin + pos + count, end, ls.begin() + pos + count2);
+            ::std::fill(ls.begin() + pos, ls.begin() + pos + count2, ch);
             dealloc_(is_long);
             long_str_(ls);
         }
@@ -2008,7 +2224,7 @@ class alignas(CharT *) basic_string
     constexpr basic_string &replace(const_iterator first, const_iterator last, size_type count2, CharT ch)
     {
         assert(first <= last);
-        replace(first.base().current_ - begin_(), last - first, count2, ch);
+        replace(first.current_ - begin_(), last - first, count2, ch);
 
         return *this;
     }
@@ -2020,19 +2236,20 @@ class alignas(CharT *) basic_string
         assert(first <= last);
         if constexpr (::std::contiguous_iterator<U> && ::std::is_same_v<value_type, ::std::iter_value_t<U>>)
         {
-            replace_(first.base().current_ - begin_(), last - first, ::std::to_address(first2),
-                     ::std::to_address(first2) + ::std::ranges::distance(first2, last2));
+            replace_(first.current_ - begin_(), last - first, ::std::to_address(first2),
+                     ::std::to_address(first2) + ::std::distance(first2, last2));
         }
         else
         {
             basic_string temp{first2, last2, allocator_};
-            replace_(first.base().current_ - begin_(), last - first, temp.begin_(), temp.end_());
+            replace_(first.current_ - begin_(), last - first, temp.begin_(), temp.end_());
         }
 
         return *this;
     }
 
-    // ********************************* begin assign_range/insert_range/append_range ******************************
+    // ************* begin assign_range/insert_range/append_range *************
+
 #if defined(__cpp_lib_containers_ranges) && (__cpp_lib_containers_ranges >= 202202L)
     template <::std::ranges::input_range R>
         requires ::std::convertible_to<::std::ranges::range_value_t<R>, CharT>
@@ -2102,7 +2319,7 @@ class alignas(CharT *) basic_string
         {
             auto const first2 = ::std::ranges::begin(rg);
             auto const last2 = ::std::ranges::end(rg);
-            replace_(first.base().current_ - begin_(), last - first, ::std::to_address(first2),
+            replace_(first.current_ - begin_(), last - first, ::std::to_address(first2),
                      ::std::to_address(first2) + ::std::ranges::distance(first2, last2));
         }
         else
@@ -2118,35 +2335,218 @@ class alignas(CharT *) basic_string
     constexpr void resize_and_overwrite(size_type count, Operation op)
     {
         reserve(count);
-        resize_shrink_(is_long_(), std::move(op)(begin_(), size_type(count)));
-    }
-
-    constexpr operator ::std::basic_string_view<CharT, Traits>() noexcept
-    {
-        return {begin_(), end_()};
+        resize_shrink_(is_long_(), ::std::move(op)(begin_(), size_type(count)));
     }
 
     constexpr allocator_type get_allocator() const noexcept
     {
         return allocator_;
     }
+
+    constexpr size_type copy(CharT *dest, size_type count, size_type pos = 0uz) const
+    {
+        if (pos > size_())
+            throw_out_of_range_();
+
+        count = ::std::min(count, size_() - pos);
+
+        ::std::copy(begin_() + pos, begin_() + pos + count, dest);
+
+        return count;
+    }
+
+    constexpr size_type find(const basic_string &str, size_type pos = 0uz) const
+    {
+        return view_().find(str.view_(), pos);
+    }
+
+    constexpr size_type find(const CharT *s, size_type pos, size_type count) const
+    {
+        return view_().find(s, pos, count);
+    }
+
+    constexpr size_type find(const CharT *s, size_type pos = 0uz) const
+    {
+        return view_().find(s, pos);
+    }
+
+    constexpr size_type find(CharT ch, size_type pos = 0uz) const
+    {
+        return view_().find(ch, pos);
+    }
+
+    template <class StringViewLike>
+        requires is_svlike_v_<StringViewLike>
+    constexpr size_type find(const StringViewLike &t, size_type pos = 0uz) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return view_().find(tsv, pos);
+    }
+
+    constexpr size_type rfind(const basic_string &str, size_type pos = npos) const
+    {
+        return view_().rfind(str.view_(), pos);
+    }
+
+    constexpr size_type rfind(const CharT *s, size_type pos, size_type count) const
+    {
+        return view_().rfind(s, pos, count);
+    }
+
+    constexpr size_type rfind(const CharT *s, size_type pos = npos) const
+    {
+        return view_().rfind(s, pos);
+    }
+
+    constexpr size_type rfind(CharT ch, size_type pos = npos) const
+    {
+        return view_().rfind(ch, pos);
+    }
+
+    template <class StringViewLike>
+    constexpr size_type rfind(const StringViewLike &t, size_type pos = npos) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return view_().rfind(tsv, pos);
+    }
+
+    constexpr size_type find_first_of(const basic_string &str, size_type pos = 0uz) const
+    {
+        return view_().find_first_of(str.view_(), pos);
+    }
+
+    constexpr size_type find_first_of(const CharT *s, size_type pos, size_type count) const
+    {
+        return view_().find_first_of(s, pos, count);
+    }
+
+    constexpr size_type find_first_of(const CharT *s, size_type pos = 0uz) const
+    {
+        return view_().find_first_of(s, pos);
+    }
+
+    constexpr size_type find_first_of(CharT ch, size_type pos = 0uz) const
+    {
+        return view_().find_first_of(ch, pos);
+    }
+
+    template <class StringViewLike>
+    constexpr size_type find_first_of(const StringViewLike &t, size_type pos = 0uz) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return view_().find_first_of(tsv, pos);
+    }
+
+    constexpr size_type find_first_not_of(const basic_string &str, size_type pos = 0uz) const
+    {
+        return view_().find_first_not_of(str.view_(), pos);
+    }
+
+    constexpr size_type find_first_not_of(const CharT *s, size_type pos, size_type count) const
+    {
+        return view_().find_first_not_of(s, pos, count);
+    }
+
+    constexpr size_type find_first_not_of(const CharT *s, size_type pos = 0uz) const
+    {
+        return view_().find_first_not_of(s, pos);
+    }
+
+    constexpr size_type find_first_not_of(CharT ch, size_type pos = 0uz) const
+    {
+        return view_().find_first_not_of(ch, pos);
+    }
+
+    template <class StringViewLike>
+    constexpr size_type find_first_not_of(const StringViewLike &t, size_type pos = 0uz) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return view_().find_first_not_of(tsv, pos);
+    }
+
+    constexpr size_type find_last_of(const basic_string &str, size_type pos = npos) const
+    {
+        return view_().find_last_of(str.view_(), pos);
+    }
+
+    constexpr size_type find_last_of(const CharT *s, size_type pos, size_type count) const
+    {
+        return view_().find_last_of(s, pos, count);
+    }
+
+    constexpr size_type find_last_of(const CharT *s, size_type pos = npos) const
+    {
+        return view_().find_last_of(s, pos);
+    }
+
+    constexpr size_type find_last_of(CharT ch, size_type pos = npos) const
+    {
+        return view_().find_last_of(ch, pos);
+    }
+
+    template <class StringViewLike>
+    constexpr size_type find_last_of(const StringViewLike &t, size_type pos = npos) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return view_().find_last_of(tsv, pos);
+    }
+
+    constexpr size_type find_last_not_of(const basic_string &str, size_type pos = npos) const
+    {
+        return view_().find_last_not_of(str.view_(), pos);
+    }
+
+    constexpr size_type find_last_not_of(const CharT *s, size_type pos, size_type count) const
+    {
+        return view_().find_last_not_of(s, pos, count);
+    }
+
+    constexpr size_type find_last_not_of(const CharT *s, size_type pos = npos) const
+    {
+        return view_().find_last_not_of(s, pos);
+    }
+
+    constexpr size_type find_last_not_of(CharT ch, size_type pos = npos) const
+    {
+        return view_().find_last_not_of(ch, pos);
+    }
+
+    template <class StringViewLike>
+    constexpr size_type find_last_not_of(const StringViewLike &t, size_type pos = npos) const
+        noexcept(::std::is_nothrow_convertible_v<const StringViewLike &, ::std::basic_string_view<CharT, Traits>>)
+    {
+        ::std::basic_string_view<CharT, Traits> tsv = t;
+
+        return view_().find_last_not_of(tsv, pos);
+    }
 };
 
-template <class InputIterator,
-          class Alloc = ::std::allocator<typename ::std::iterator_traits<InputIterator>::value_type>>
+template <::std::input_iterator InputIterator, string_detail::mini_alloc Alloc = ::std::allocator<
+                                                   typename ::std::iterator_traits<InputIterator>::value_type>>
 basic_string(InputIterator, InputIterator, Alloc = Alloc())
     -> basic_string<typename ::std::iterator_traits<InputIterator>::value_type,
                     ::std::char_traits<typename ::std::iterator_traits<InputIterator>::value_type>, Alloc>;
 
-template <::std::ranges::input_range R, class Alloc = ::std::allocator<::std::ranges::range_value_t<R>>>
+template <::std::ranges::input_range R,
+          string_detail::mini_alloc Alloc = ::std::allocator<::std::ranges::range_value_t<R>>>
 basic_string(::std::from_range_t, R &&, Alloc = Alloc())
     -> basic_string<::std::ranges::range_value_t<R>, ::std::char_traits<::std::ranges::range_value_t<R>>, Alloc>;
 
-template <class CharT, class Traits, class Alloc = ::std::allocator<CharT>>
+template <class CharT, class Traits, string_detail::mini_alloc Alloc = ::std::allocator<CharT>>
 explicit basic_string(::std::basic_string_view<CharT, Traits>, const Alloc & = Alloc())
     -> basic_string<CharT, Traits, Alloc>;
 
-template <class CharT, class Traits, class Alloc = ::std::allocator<CharT>>
+template <class CharT, class Traits, string_detail::mini_alloc Alloc = ::std::allocator<CharT>>
 basic_string(::std::basic_string_view<CharT, Traits>, ::std::size_t, ::std::size_t, const Alloc & = Alloc())
     -> basic_string<CharT, Traits, Alloc>;
 
@@ -2155,10 +2555,37 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
     const bizwen::basic_string<CharT, Traits, Alloc> &lhs, const bizwen::basic_string<CharT, Traits, Alloc> &rhs)
 {
     bizwen::basic_string<CharT, Traits, Alloc> r{
-        std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.get_allocator())};
+        ::std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.get_allocator())};
     r.reserve(lhs.size() + rhs.size());
     r.append(lhs);
     r.append(rhs);
+
+    return r;
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+    const bizwen::basic_string<CharT, Traits, Alloc> &lhs, const CharT *rhs)
+{
+    bizwen::basic_string<CharT, Traits, Alloc> r{
+        ::std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.get_allocator())};
+    auto rsize = Traits::length(rhs);
+    r.reserve(lhs.size() + rsize);
+    r.append(lhs);
+    r.append(rhs, rsize);
+
+    return r;
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+    const bizwen::basic_string<CharT, Traits, Alloc> &lhs, const CharT rhs)
+{
+    bizwen::basic_string<CharT, Traits, Alloc> r{
+        ::std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.get_allocator())};
+    r.reserve(lhs.size() + 1uz);
+    r.append(lhs);
+    r.push_back(rhs);
 
     return r;
 }
@@ -2169,9 +2596,36 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
     ::std::type_identity_t<::std::basic_string_view<CharT, Traits>> rhs)
 {
     bizwen::basic_string<CharT, Traits, Alloc> r{
-        std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.get_allocator())};
+        ::std::allocator_traits<Alloc>::select_on_container_copy_construction(lhs.get_allocator())};
     r.reserve(lhs.size() + rhs.size());
     r.append(lhs);
+    r.append(rhs);
+
+    return r;
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+    const CharT *lhs, const bizwen::basic_string<CharT, Traits, Alloc> &rhs)
+{
+    bizwen::basic_string<CharT, Traits, Alloc> r{
+        ::std::allocator_traits<Alloc>::select_on_container_copy_construction(rhs.get_allocator())};
+    auto lsize = Traits::length(lhs);
+    r.reserve(lsize + rhs.size());
+    r.append(lhs, lsize);
+    r.append(rhs);
+
+    return r;
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
+    CharT lhs, const bizwen::basic_string<CharT, Traits, Alloc> &rhs)
+{
+    bizwen::basic_string<CharT, Traits, Alloc> r{
+        ::std::allocator_traits<Alloc>::select_on_container_copy_construction(rhs.get_allocator())};
+    r.reserve(1uz + rhs.size());
+    r.push_back(lhs);
     r.append(rhs);
 
     return r;
@@ -2197,7 +2651,7 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(bizwen::ba
 {
     lhs.append(rhs);
 
-    return std::move(lhs);
+    return ::std::move(lhs);
 }
 
 template <class CharT, class Traits, class Alloc>
@@ -2206,16 +2660,35 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
 {
     lhs.append(rhs);
 
-    return std::move(lhs);
+    return ::std::move(lhs);
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(bizwen::basic_string<CharT, Traits, Alloc> &&lhs,
+                                                                      const CharT *rhs)
+{
+    lhs.append(rhs);
+
+    return ::std::move(lhs);
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(bizwen::basic_string<CharT, Traits, Alloc> &&lhs,
+                                                                      const CharT rhs)
+{
+    lhs.push_back(rhs);
+
+    return ::std::move(lhs);
 }
 
 template <class CharT, class Traits, class Alloc>
 inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
-    bizwen::basic_string<CharT, Traits, Alloc> &&lhs, ::std::type_identity_t<std::basic_string_view<CharT, Traits>> rhs)
+    bizwen::basic_string<CharT, Traits, Alloc> &&lhs,
+    ::std::type_identity_t<::std::basic_string_view<CharT, Traits>> rhs)
 {
     lhs.append(rhs);
 
-    return std::move(lhs);
+    return ::std::move(lhs);
 }
 
 template <class CharT, class Traits, class Alloc>
@@ -2224,23 +2697,40 @@ inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
 {
     rhs.insert(0uz, lhs);
 
+    return ::std::move(rhs);
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(const CharT *lhs,
+                                                                      bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
+{
+    rhs.insert(0uz, lhs);
+    return std::move(rhs);
+}
+
+template <class CharT, class Traits, class Alloc>
+inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(const CharT lhs,
+                                                                      bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
+{
+    rhs.insert(rhs.begin(), lhs);
     return std::move(rhs);
 }
 
 template <class CharT, class Traits, class Alloc>
 inline constexpr bizwen::basic_string<CharT, Traits, Alloc> operator+(
-    std::type_identity_t<std::basic_string_view<CharT, Traits>> lhs, bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
+    ::std::type_identity_t<::std::basic_string_view<CharT, Traits>> lhs,
+    bizwen::basic_string<CharT, Traits, Alloc> &&rhs)
 {
     rhs.insert(0uz, lhs);
 
-    return std::move(rhs);
+    return ::std::move(rhs);
 }
 
 template <class CharT, class Traits, class Alloc, class U = CharT>
 inline constexpr typename basic_string<CharT, Traits, Alloc>::size_type erase(basic_string<CharT, Traits, Alloc> &c,
                                                                               const U &value)
 {
-    auto const r = std::ranges::size(std::ranges::remove(c, value));
+    auto const r = c.end() - ::std::remove(c.begin(), c.end(), value);
     c.resize(c.size() - r);
 
     return r;
@@ -2250,11 +2740,20 @@ template <class CharT, class Traits, class Alloc, class Pred>
 inline constexpr typename basic_string<CharT, Traits, Alloc>::size_type erase_if(basic_string<CharT, Traits, Alloc> &c,
                                                                                  Pred pred)
 {
-    auto const r = std::ranges::size(std::ranges::remove_if(c, pred));
+    auto const r = c.end() - ::std::remove_if(c.begin(), c.end(), pred);
     c.resize(c.size() - r);
 
     return r;
 }
+
+template <class CharT, class Traits = ::std::char_traits<CharT>>
+using basic_string_view = ::std::basic_string_view<CharT, Traits>;
+
+using string_view = basic_string_view<char>;
+using wstring_view = basic_string_view<wchar_t>;
+using u8string_view = basic_string_view<char8_t>;
+using u16string_view = basic_string_view<char16_t>;
+using u32string_view = basic_string_view<char32_t>;
 
 using string = bizwen::basic_string<char>;
 using wstring = bizwen::basic_string<wchar_t>;
@@ -2262,17 +2761,19 @@ using u8string = bizwen::basic_string<char8_t>;
 using u16string = bizwen::basic_string<char16_t>;
 using u32string = bizwen::basic_string<char32_t>;
 
+#if !defined(NDEBUG)
 static_assert(sizeof(string) == sizeof(char8_t *) * 4uz);
 static_assert(sizeof(wstring) == sizeof(char8_t *) * 4uz);
 static_assert(sizeof(u8string) == sizeof(char8_t *) * 4uz);
 static_assert(sizeof(u16string) == sizeof(char8_t *) * 4uz);
 static_assert(sizeof(u32string) == sizeof(char8_t *) * 4uz);
 static_assert(::std::contiguous_iterator<string::iterator>);
+#endif
 
 namespace pmr
 {
 template <class CharT, class Traits = ::std::char_traits<CharT>>
-using basic_string = basic_string<CharT, Traits, ::std::pmr::polymorphic_allocator<CharT>>;
+using basic_string = ::bizwen::basic_string<CharT, Traits, ::std::pmr::polymorphic_allocator<CharT>>;
 
 using string = basic_string<char>;
 using wstring = basic_string<wchar_t>;
@@ -2284,10 +2785,14 @@ using u32string = basic_string<char32_t>;
 
 namespace std
 {
-template <typename CharT, typename Traits, typename Allocator>
-struct hash<bizwen::basic_string<CharT, Traits, Allocator>>
+template <typename CharT, typename Traits, typename Alloc>
+    requires(::std::is_same_v<Traits, ::std::char_traits<CharT>> &&
+             (::std::is_same_v<CharT, char> || ::std::is_same_v<CharT, wchar_t> ||
+              ::std::is_same_v<CharT, char8_t> || ::std::is_same_v<CharT, char16_t> ||
+              ::std::is_same_v<CharT, char32_t>))
+struct hash<bizwen::basic_string<CharT, Traits, Alloc>>
 {
-    static constexpr ::std::size_t operator()(bizwen::basic_string<CharT, Traits, Allocator> const &str) noexcept
+    constexpr ::std::size_t operator()(bizwen::basic_string<CharT, Traits, Alloc> const &str) const noexcept
     {
         using view = ::std::basic_string_view<CharT, Traits>;
         ::std::hash<view> hasher;
@@ -2297,4 +2802,28 @@ struct hash<bizwen::basic_string<CharT, Traits, Allocator>>
 };
 } // namespace std
 
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(pop)
+#elif defined(__clang__)
+#pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
 #endif
+
+#endif // BIZWEN_BASIC_STRING_HPP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
